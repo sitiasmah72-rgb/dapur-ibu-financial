@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dapur Ibu - Financial Manager</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg: #FBF6F2;
+  --surface: #FFFFFF;
+  --surface-alt: #F5EBE6;
+  --border: #EADFD8;
+  --primary: #B9718C;
+  --primary-dark: #9A5570;
+  --primary-light: #F0DCE3;
+  --positive: #6E8B6E;
+  --positive-bg: #E7EEE3;
+  --negative: #C46B5E;
+  --negative-bg: #F5E4DF;
+  --warning: #C99A3E;
+  --warning-bg: #F6EBD4;
+  --text: #3B2E33;
+  --text-muted: #8B7A80;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding-bottom: 76px;
+}
+h1, h2, h3 { font-weight: 700; }
+.top { padding: 20px 16px 12px; display: flex; align-items: center; justify-content: space-between; }
+.top h1 { font-size: 1.15rem; color: var(--primary-dark); }
+.top .sub { font-size: 0.75rem; color: var(--text-muted); }
+main { padding: 0 16px 16px; max-width: 480px; margin: 0 auto; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+.card { background: var(--surface); border-radius: 14px; padding: 14px; box-shadow: 0 1px 3px rgba(59,46,51,0.06); }
+.card-title { font-size: 0.68rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .03em; margin-bottom: 4px;}
+.card-value { font-size: 1.15rem; font-weight: 700; }
+.card-value.positive { color: var(--positive); }
+.card-value.negative { color: var(--negative); }
+.card-value.warning { color: var(--warning); }
+.today-banner {
+  background: var(--primary-light); border-radius: 14px; padding: 14px 16px;
+  margin-bottom: 16px; display:flex; justify-content:space-between; align-items:center;
+}
+.today-banner .label { font-size: 0.75rem; color: var(--primary-dark); font-weight:700; }
+.today-banner .value { font-size: 1.3rem; font-weight: 800; color: var(--primary-dark); }
+.section-title { font-size: 1rem; margin: 18px 0 10px; display:flex; justify-content:space-between; align-items:center;}
+.list-item {
+  background: var(--surface); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px;
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+}
+.list-item .info { flex: 1; min-width: 0; }
+.list-item .info .t1 { font-weight: 600; font-size: 0.9rem; }
+.list-item .info .t2 { font-size: 0.75rem; color: var(--text-muted); }
+.list-item .amt { font-weight: 700; font-size: 0.9rem; white-space: nowrap; }
+.list-item .del { color: var(--negative); font-size: 1rem; padding: 4px 6px; background:none; border:none; cursor:pointer; }
+.empty { text-align: center; padding: 24px 8px; color: var(--text-muted); font-size: 0.875rem; }
+.fab {
+  position: fixed; bottom: 84px; right: 20px; width: 52px; height: 52px; border-radius: 50%;
+  background: var(--primary); color: #fff; font-size: 1.5rem; border: none;
+  box-shadow: 0 6px 16px rgba(185,113,140,0.4); cursor: pointer;
+}
+.fab.hidden-fab { display: none; }
+.bottomnav {
+  position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface);
+  border-top: 1px solid var(--border); display: flex; height: 64px; overflow-x:auto;
+}
+.bottomnav button {
+  flex: 1; min-width:64px; background: none; border: none;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; font-size: 0.63rem; color: var(--text-muted); cursor: pointer;
+}
+.bottomnav button.active { color: var(--primary-dark); font-weight: 700; }
+.bottomnav .icon { font-size: 1.15rem; }
+.page { display: none; }
+.page.active { display: block; }
+.modal-bg {
+  display: none; position: fixed; inset: 0; background: rgba(59,46,51,0.4);
+  align-items: flex-end; justify-content: center; z-index: 50;
+}
+.modal-bg.show { display: flex; }
+.modal { background: var(--surface); border-radius: 20px 20px 0 0; padding: 20px 18px 28px; width: 100%; max-width: 480px; max-height:85vh; overflow-y:auto; }
+.modal h3 { margin-bottom: 14px; }
+.field { margin-bottom: 12px; }
+.field label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
+.field input, .field select {
+  width: 100%; padding: 10px 12px; border-radius: 8px;
+  border: 1.5px solid var(--border); font-size: 0.95rem; background: #fff;
+}
+.modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+.btn { flex: 1; padding: 12px; border-radius: 10px; border: none; font-weight: 700; font-size: 0.9rem; cursor: pointer; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-secondary { background: var(--surface-alt); color: var(--text); }
+.tag { display:inline-block; font-size:0.65rem; background:var(--primary-light); color:var(--primary-dark); padding:2px 8px; border-radius:20px; font-weight:700; }
+.tag.warn { background: var(--warning-bg); color: var(--warning); }
+.notice {
+  background: var(--primary-light); color: var(--primary-dark);
+  font-size: 0.75rem; padding: 10px 12px; border-radius: 10px; margin-bottom: 14px;
+}
+.notice.ref {
+  background: var(--surface-alt); color: var(--text-muted);
+}
+/* --- Auth screen --- */
+#authScreen {
+  min-height: 100vh; display:flex; align-items:center; justify-content:center; padding:16px;
+  background: linear-gradient(160deg, var(--bg) 0%, var(--primary-light) 100%);
+}
+.auth-card { background: var(--surface); border-radius: 22px; box-shadow: 0 12px 32px rgba(59,46,51,0.12); padding: 32px 24px; width:100%; max-width:380px; }
+.auth-brand { text-align:center; margin-bottom:24px; }
+.auth-brand .emoji { font-size:2.25rem; }
+.auth-brand h1 { margin-top:8px; font-size:1.4rem; color:var(--primary-dark); }
+.auth-brand p { color:var(--text-muted); font-size:0.8rem; margin-top:4px; }
+.auth-toggle { display:flex; background:var(--surface-alt); border-radius:10px; padding:3px; margin-bottom:18px; }
+.auth-toggle button { flex:1; padding:8px; border-radius:8px; font-weight:700; font-size:0.85rem; color:var(--text-muted); background:none; border:none; cursor:pointer; }
+.auth-toggle button.active { background:var(--surface); color:var(--primary-dark); box-shadow:0 1px 3px rgba(59,46,51,0.08); }
+#authLoading { display:flex; align-items:center; justify-content:center; min-height:100vh; color:var(--text-muted); }
+.spinner { width:20px; height:20px; border:2.5px solid rgba(185,113,140,0.25); border-top-color:var(--primary); border-radius:50%; animation:spin .7s linear infinite; display:inline-block; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.ing-card { background: var(--surface); border-radius: 14px; padding: 14px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(59,46,51,0.06); }
+.ing-head { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; gap:8px; }
+.ing-head .name { font-weight:700; font-size:0.95rem; }
+.ing-head .actions { display:flex; gap:6px; flex:none; }
+.ing-head .actions button { background: var(--surface-alt); border:none; border-radius:8px; width:28px; height:28px; font-size:0.85rem; cursor:pointer; }
+.ing-head .actions .del { color: var(--negative); }
+.ing-grid { display:grid; grid-template-columns: 1fr 1fr; gap:6px 10px; font-size:0.8rem; }
+.ing-grid .lbl { color: var(--text-muted); font-size:0.68rem; text-transform:uppercase; letter-spacing:.02em; }
+.ing-grid .val { font-weight:600; }
+#loadingScreen { display:flex; align-items:center; justify-content:center; min-height:100vh; color: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<div id="authLoading"><span class="spinner"></span></div>
+
+<div id="authScreen" class="hidden" style="display:none;">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="emoji">🥧</div>
+      <h1>Dapur Ibu</h1>
+      <p>Financial Manager</p>
+    </div>
+    <div class="auth-toggle">
+      <button type="button" id="tabLogin" class="active">Log Masuk</button>
+      <button type="button" id="tabSignup">Daftar</button>
+    </div>
+    <div id="authError" class="notice" style="display:none; background:var(--negative-bg); color:var(--negative);"></div>
+    <form id="authForm">
+      <div class="field"><label>Emel</label><input type="email" id="authEmail" required placeholder="ibu@contoh.com"></div>
+      <div class="field"><label>Kata Laluan</label><input type="password" id="authPassword" required minlength="6" placeholder="Sekurang-kurangnya 6 aksara"></div>
+      <button type="submit" id="authSubmitBtn" class="btn btn-primary btn-block" style="width:100%;">Log Masuk</button>
+    </form>
+  </div>
+</div>
+
+<div id="appRoot" style="display:none;">
+  <div class="top">
+    <div>
+      <h1>🥧 Dapur Ibu</h1>
+      <div class="sub">Financial Manager</div>
+    </div>
+    <button class="btn btn-secondary" id="logoutBtn" style="flex:none;padding:6px 12px;font-size:0.75rem;">Log Keluar</button>
+  </div>
+
+  <main>
+    <!-- DASHBOARD -->
+    <section class="page active" id="page-dashboard">
+      <div class="grid">
+        <div class="card">
+          <div class="card-title">Masuk · Cash</div>
+          <div class="card-value positive num" id="sumIncomeCash">RM 0.00</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Masuk · QR/Transfer</div>
+          <div class="card-value positive num" id="sumIncomeBank">RM 0.00</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Duit Keluar</div>
+          <div class="card-value negative num" id="sumExpense">RM 0.00</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Jumlah Ada</div>
+          <div class="card-value num" id="sumBalance">RM 0.00</div>
+        </div>
+      </div>
+
+      <div class="section-title">Transaksi Terkini</div>
+      <div id="recentList"></div>
+    </section>
+
+    <!-- DUIT MASUK -->
+    <section class="page" id="page-masuk">
+      <div class="section-title">💰 Duit Masuk</div>
+      <div class="today-banner">
+        <div>
+          <div class="label">MASUK HARI INI</div>
+          <div class="value num" id="todayIncome">RM 0.00</div>
+        </div>
+      </div>
+      <div id="incomeList"></div>
+    </section>
+
+    <!-- DUIT KELUAR -->
+    <section class="page" id="page-keluar">
+      <div class="section-title">🧾 Duit Keluar</div>
+      <div id="expenseList"></div>
+    </section>
+
+    <!-- PEMBELIAN BARANG -->
+    <section class="page" id="page-beli">
+      <div class="section-title">🛒 Pembelian Barang</div>
+      <div class="notice ref">📌 Rujukan sahaja — untuk banding harga bahan ikut kedai. Tidak dikira dalam Dashboard / Akaun.</div>
+      <div id="priceCompareBox"></div>
+      <div class="section-title" style="font-size:0.85rem;">Senarai Bahan</div>
+      <div id="purchaseList"></div>
+    </section>
+
+    <!-- GAJI -->
+    <section class="page" id="page-gaji">
+      <div class="section-title">👥 Gaji Pekerja</div>
+      <div id="payrollList"></div>
+    </section>
+
+    <!-- AKAUN -->
+    <section class="page" id="page-akaun">
+      <div class="section-title">
+        🏦 Akaun
+        <button class="btn btn-secondary" style="flex:none;padding:6px 12px;font-size:0.75rem;" id="btnEditSaldo">Edit Baki</button>
+      </div>
+      <div class="grid cols-3">
+        <div class="card">
+          <div class="card-title">Cash</div>
+          <div class="card-value num" id="accCash">RM 0.00</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Bank</div>
+          <div class="card-value num" id="accBank">RM 0.00</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Hutang</div>
+          <div class="card-value negative num" id="accHutang">RM 0.00</div>
+        </div>
+      </div>
+      <div class="notice ref" id="hutangNote" style="display:none;"></div>
+    </section>
+
+    <!-- HUTANG -->
+    <section class="page" id="page-hutang">
+      <div class="section-title">📉 Hutang</div>
+      <div class="notice ref">📌 Hutang lain (pinjaman/bekalan). Hutang dari kekurangan gaji dikira automatik di Akaun.</div>
+      <div id="debtList"></div>
+    </section>
+
+    <!-- LAPORAN -->
+    <section class="page" id="page-laporan">
+      <div class="section-title">📊 Laporan</div>
+      <div class="field"><label>Pilih Bulan</label><input type="month" id="laporanBulan"></div>
+      <div class="grid">
+        <div class="card"><div class="card-title">Masuk</div><div class="card-value positive num" id="lapMasuk">RM 0.00</div></div>
+        <div class="card"><div class="card-title">Keluar</div><div class="card-value negative num" id="lapKeluar">RM 0.00</div></div>
+        <div class="card"><div class="card-title">Gaji Dibayar</div><div class="card-value negative num" id="lapGaji">RM 0.00</div></div>
+        <div class="card"><div class="card-title">Baki Bersih</div><div class="card-value num" id="lapBersih">RM 0.00</div></div>
+      </div>
+      <div class="section-title" style="font-size:0.85rem;">Rekod Bulan Ini</div>
+      <div id="lapList"></div>
+
+      <div class="section-title" style="font-size:0.85rem;">💾 Backup</div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-secondary" id="btnExport">Export JSON</button>
+        <button class="btn btn-secondary" id="btnImportTrigger">Import JSON</button>
+        <input type="file" id="importFile" accept="application/json" style="display:none;">
+      </div>
+    </section>
+
+    <!-- CARIAN -->
+    <section class="page" id="page-carian">
+      <div class="section-title">🔍 Carian</div>
+      <div class="field"><input type="text" id="searchBox" placeholder="Cari bahan, kedai, sumber, pekerja..."></div>
+      <div id="searchResults"></div>
+    </section>
+  </main>
+
+  <button class="fab" id="fabAdd">+</button>
+
+  <nav class="bottomnav">
+    <button data-page="dashboard" class="active"><span class="icon">🏠</span>Dashboard</button>
+    <button data-page="masuk"><span class="icon">💰</span>Masuk</button>
+    <button data-page="keluar"><span class="icon">🧾</span>Keluar</button>
+    <button data-page="beli"><span class="icon">🛒</span>Beli</button>
+    <button data-page="gaji"><span class="icon">👥</span>Gaji</button>
+    <button data-page="hutang"><span class="icon">📉</span>Hutang</button>
+    <button data-page="akaun"><span class="icon">🏦</span>Akaun</button>
+    <button data-page="laporan"><span class="icon">📊</span>Laporan</button>
+    <button data-page="carian"><span class="icon">🔍</span>Cari</button>
+  </nav>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3 id="modalTitle">Tambah Rekod</h3>
+    <div id="modalFields"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="modalCancel">Batal</button>
+      <button class="btn btn-primary" id="modalSave">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<script>// ============================================================
+// KONFIGURASI SUPABASE — Ibu isi anon key di bawah
+// ============================================================
+const SUPABASE_URL = 'https://zqvqlqndsqnybhrcniso.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_bkgAZuE3-0FQhjBVSuOBRg_524BbXG8';
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let DATA = { income: [], expense: [], purchases: [], payroll: [], debts: [], startingCash: 0, startingBank: 0 };
+let currentPage = 'dashboard';
+let editingPurchaseId = null;
+let editingDebtId = null;
+let currentUserId = null;
+
+// ============================================================
+// AUTHENTICATION
+// ============================================================
+const authScreen = document.getElementById('authScreen');
+const authLoading = document.getElementById('authLoading');
+const appRoot = document.getElementById('appRoot');
+const authForm = document.getElementById('authForm');
+const authError = document.getElementById('authError');
+const authSubmitBtn = document.getElementById('authSubmitBtn');
+const tabLogin = document.getElementById('tabLogin');
+const tabSignup = document.getElementById('tabSignup');
+let authMode = 'login';
+
+function setAuthMode(mode) {
+  authMode = mode;
+  tabLogin.classList.toggle('active', mode === 'login');
+  tabSignup.classList.toggle('active', mode === 'signup');
+  authSubmitBtn.textContent = mode === 'login' ? 'Log Masuk' : 'Daftar Akaun';
+  authError.style.display = 'none';
+}
+tabLogin.addEventListener('click', () => setAuthMode('login'));
+tabSignup.addEventListener('click', () => setAuthMode('signup'));
+
+function showAuthError(msg) {
+  authError.textContent = msg;
+  authError.style.display = 'block';
+}
+
+function terjemahRalatAuth(msg) {
+  const map = {
+    'Invalid login credentials': 'Emel atau kata laluan salah.',
+    'User already registered': 'Emel ini sudah didaftarkan. Sila log masuk.',
+    'Password should be at least 6 characters': 'Kata laluan mesti sekurang-kurangnya 6 aksara.',
+  };
+  return map[msg] || msg;
+}
+
+authForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  authError.style.display = 'none';
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  authSubmitBtn.disabled = true;
+  authSubmitBtn.innerHTML = '<span class="spinner"></span>';
+  try {
+    let result;
+    if (authMode === 'login') {
+      result = await supabaseClient.auth.signInWithPassword({ email, password });
+    } else {
+      result = await supabaseClient.auth.signUp({ email, password });
+    }
+    if (result.error) throw result.error;
+    if (authMode === 'signup' && !result.data.session) {
+      showAuthError('Akaun didaftar. Sila semak emel untuk sahkan akaun, kemudian log masuk.');
+      setAuthMode('login');
+    }
+  } catch (err) {
+    showAuthError(terjemahRalatAuth(err.message));
+  } finally {
+    authSubmitBtn.disabled = false;
+    authSubmitBtn.textContent = authMode === 'login' ? 'Log Masuk' : 'Daftar Akaun';
+  }
+});
+
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  await supabaseClient.auth.signOut();
+});
+
+supabaseClient.auth.onAuthStateChange(async (event, session) => {
+  authLoading.style.display = 'none';
+  if (session) {
+    currentUserId = session.user.id;
+    authScreen.style.display = 'none';
+    appRoot.style.display = 'block';
+    await loadData();
+  } else {
+    currentUserId = null;
+    appRoot.style.display = 'none';
+    authScreen.style.display = 'flex';
+  }
+});
+
+// ============================================================
+// PEMETAAN LAJUR DB <-> DATA (snake_case <-> camelCase)
+// ============================================================
+function mapPurchaseFromDb(r) {
+  return { id: r.id, bahan: r.bahan, kedai: r.kedai || '', berat: Number(r.berat) || 0, unit: r.unit,
+    hargaUnit: Number(r.harga_unit) || 0, kuantitiKarton: Number(r.kuantiti_karton) || 0, hargaKarton: Number(r.harga_karton) || 0 };
+}
+function mapPayrollFromDb(r) {
+  return { id: r.id, nama: r.nama, jumlah: Number(r.jumlah), kaedah: r.kaedah, tarikhBayar: r.tarikh_bayar };
+}
+function mapDebtFromDb(r) {
+  return { id: r.id, pemiutang: r.pemiutang, jumlah: Number(r.jumlah), baki: Number(r.baki),
+    bayaranBulanan: Number(r.bayaran_bulanan) || 0, tarikhAkhir: r.tarikh_akhir, status: r.status };
+}
+
+// ============================================================
+// MUAT DATA DARI SUPABASE
+// ============================================================
+async function loadData() {
+  const [incomeRes, expenseRes, purchasesRes, payrollRes, debtsRes, settingsRes] = await Promise.all([
+    supabaseClient.from('income').select('*').order('tarikh', { ascending: false }),
+    supabaseClient.from('expense').select('*').order('tarikh', { ascending: false }),
+    supabaseClient.from('purchases').select('*').order('bahan'),
+    supabaseClient.from('payroll').select('*').order('tarikh_bayar'),
+    supabaseClient.from('debts').select('*'),
+    supabaseClient.from('settings').select('*').eq('user_id', currentUserId).maybeSingle(),
+  ]);
+
+  DATA.income = incomeRes.data || [];
+  DATA.expense = expenseRes.data || [];
+  DATA.purchases = (purchasesRes.data || []).map(mapPurchaseFromDb);
+  DATA.payroll = (payrollRes.data || []).map(mapPayrollFromDb);
+  DATA.debts = (debtsRes.data || []).map(mapDebtFromDb);
+  DATA.startingCash = settingsRes.data ? Number(settingsRes.data.starting_cash) : 0;
+  DATA.startingBank = settingsRes.data ? Number(settingsRes.data.starting_bank) : 0;
+
+  renderAll();
+}
+
+function fmt(n) {
+  return 'RM ' + (Number(n) || 0).toLocaleString('ms-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function todayStr() { return new Date().toISOString().slice(0,10); }
+
+function renderAll() {
+  renderDashboard();
+  renderIncome();
+  renderExpense();
+  renderPurchases();
+  renderPayroll();
+  renderDebts();
+  renderAccounts();
+  renderLaporan();
+  renderSearch();
+}
+
+// ---------- Akaun (Cash / Bank / Hutang) ----------
+function computeAccounts() {
+  const today = todayStr();
+
+  const cashIncome = DATA.income.filter(x => x.kaedah === 'Cash').reduce((s,x)=>s+Number(x.jumlah),0);
+  const bankIncome = DATA.income.filter(x => x.kaedah !== 'Cash').reduce((s,x)=>s+Number(x.jumlah),0);
+
+  const cashExpense = DATA.expense.filter(x => x.kaedah === 'Cash').reduce((s,x)=>s+Number(x.jumlah),0);
+  const bankExpense = DATA.expense.filter(x => x.kaedah !== 'Cash').reduce((s,x)=>s+Number(x.jumlah),0);
+
+  let cash = Number(DATA.startingCash) + cashIncome - cashExpense;
+  let bank = Number(DATA.startingBank) + bankIncome - bankExpense;
+
+  const duePayroll = DATA.payroll.filter(x => x.tarikhBayar <= today);
+  const upcomingPayroll = DATA.payroll.filter(x => x.tarikhBayar > today);
+
+  const duePayrollCash = duePayroll.filter(x => x.kaedah === 'Cash').reduce((s,x)=>s+Number(x.jumlah),0);
+  const duePayrollBank = duePayroll.filter(x => x.kaedah === 'Transfer').reduce((s,x)=>s+Number(x.jumlah),0);
+
+  let hutangGaji = 0;
+  cash -= duePayrollCash;
+  if (cash < 0) { hutangGaji += -cash; cash = 0; }
+  bank -= duePayrollBank;
+  if (bank < 0) { hutangGaji += -bank; bank = 0; }
+
+  const hutangLain = DATA.debts.filter(d => d.status !== 'selesai').reduce((s,d)=>s+Number(d.baki),0);
+  const hutang = hutangGaji + hutangLain;
+
+  const totalIncome = cashIncome + bankIncome;
+  const totalExpense = cashExpense + bankExpense;
+  const totalPayrollDue = duePayrollCash + duePayrollBank;
+  const totalPayrollUpcoming = upcomingPayroll.reduce((s,x)=>s+Number(x.jumlah),0);
+
+  return { cash, bank, hutang, hutangGaji, hutangLain, cashIncome, bankIncome, totalIncome, totalExpense, totalPayrollDue, totalPayrollUpcoming };
+}
+
+function renderAccounts() {
+  const { cash, bank, hutang, hutangGaji, hutangLain, totalPayrollUpcoming } = computeAccounts();
+  document.getElementById('accCash').textContent = fmt(cash);
+  document.getElementById('accBank').textContent = fmt(bank);
+  document.getElementById('accHutang').textContent = fmt(hutang);
+  const note = document.getElementById('hutangNote');
+  let msgs = [];
+  if (hutangGaji > 0) msgs.push('⚠️ Hutang RM ' + hutangGaji.toFixed(2) + ' terjana sebab Cash/Bank tak cukup untuk tampung gaji yang dah sampai tarikh.');
+  if (hutangLain > 0) msgs.push('📉 Hutang lain (pinjaman/bekalan): RM ' + hutangLain.toFixed(2) + ' — lihat halaman Hutang.');
+  if (totalPayrollUpcoming > 0) msgs.push('🗓️ RM ' + totalPayrollUpcoming.toFixed(2) + ' gaji akan datang (belum sampai tarikh) — belum ditolak dari akaun lagi.');
+  if (msgs.length) { note.style.display = 'block'; note.innerHTML = msgs.join('<br>'); }
+  else { note.style.display = 'none'; }
+}
+
+function renderDashboard() {
+  const { cash, bank, cashIncome, bankIncome, totalExpense, totalPayrollDue } = computeAccounts();
+  document.getElementById('sumIncomeCash').textContent = fmt(cashIncome);
+  document.getElementById('sumIncomeBank').textContent = fmt(bankIncome);
+  document.getElementById('sumExpense').textContent = fmt(totalExpense + totalPayrollDue);
+  document.getElementById('sumBalance').textContent = fmt(cash + bank);
+
+  const today = todayStr();
+  const idTime = (id) => { const m = String(id).match(/\d+/); return m ? parseInt(m[0]) : 0; };
+
+  const all = [
+    ...DATA.income.map(x => ({...x, jenis:'masuk', label: '💰 ' + (x.sumber || 'Jualan') + ' · ' + (x.kaedah || 'Cash')})),
+    ...DATA.expense.map(x => ({...x, jenis:'keluar', label: '🧾 ' + (x.item || '-') + ' · ' + (x.kaedah || 'Cash')})),
+    ...DATA.payroll.filter(x => x.tarikhBayar <= today).map(x => ({...x, jenis:'keluar', label: '👥 Gaji ' + x.nama + ' · ' + (x.kaedah || 'Cash'), tarikh: x.tarikhBayar})),
+  ].sort((a,b) => {
+    const d = new Date(b.tarikh) - new Date(a.tarikh);
+    return d !== 0 ? d : idTime(b.id) - idTime(a.id);
+  }).slice(0, 10);
+
+  const el = document.getElementById('recentList');
+  el.innerHTML = all.length === 0
+    ? '<div class="empty">Belum ada transaksi. Tekan + untuk tambah.</div>'
+    : all.map(x => `
+      <div class="list-item">
+        <div class="info"><div class="t1">${x.label}</div><div class="t2">${x.tarikh}</div></div>
+        <div class="amt" style="color:${x.jenis==='masuk' ? 'var(--positive)' : 'var(--negative)'}">${x.jenis==='masuk'?'+':'-'}${fmt(x.jumlah)}</div>
+      </div>`).join('');
+}
+
+function renderIncome() {
+  const today = todayStr();
+  const todayTotal = DATA.income.filter(x => x.tarikh === today).reduce((s,x)=>s+Number(x.jumlah),0);
+  document.getElementById('todayIncome').textContent = fmt(todayTotal);
+
+  const el = document.getElementById('incomeList');
+  el.innerHTML = DATA.income.length === 0 ? '<div class="empty">Tiada rekod lagi.</div>' :
+    [...DATA.income].sort((a,b)=>new Date(b.tarikh)-new Date(a.tarikh)).map(x => `
+      <div class="list-item">
+        <div class="info"><div class="t1">${x.sumber || '-'} <span class="tag">${x.kaedah || 'Cash'}</span></div><div class="t2">${x.tarikh}${x.catatan? ' · '+x.catatan:''}</div></div>
+        <div class="amt" style="color:var(--positive)">${fmt(x.jumlah)}</div>
+        <button class="del" onclick="deleteItem('income','${x.id}')">✕</button>
+      </div>`).join('');
+}
+
+function renderExpense() {
+  const el = document.getElementById('expenseList');
+  el.innerHTML = DATA.expense.length === 0 ? '<div class="empty">Tiada rekod lagi.</div>' :
+    [...DATA.expense].sort((a,b)=>new Date(b.tarikh)-new Date(a.tarikh)).map(x => `
+      <div class="list-item">
+        <div class="info"><div class="t1">${x.item || '-'}</div><div class="t2">${x.tarikh} · ${x.kaedah || '-'}</div></div>
+        <div class="amt" style="color:var(--negative)">${fmt(x.jumlah)}</div>
+        <button class="del" onclick="deleteItem('expense','${x.id}')">✕</button>
+      </div>`).join('');
+}
+
+function renderPurchases() {
+  const compareBox = document.getElementById('priceCompareBox');
+  const listEl = document.getElementById('purchaseList');
+  if (DATA.purchases.length === 0) {
+    compareBox.innerHTML = '';
+    listEl.innerHTML = '<div class="empty">Belum ada bahan direkod. Tekan + untuk tambah.</div>';
+    return;
+  }
+  const byItem = {};
+  DATA.purchases.forEach(p => {
+    const key = p.bahan.trim().toLowerCase();
+    if (!byItem[key]) byItem[key] = { bahan: p.bahan, entries: [] };
+    byItem[key].entries.push(p);
+  });
+
+  const multiStoreGroups = Object.values(byItem).filter(g => g.entries.length > 1);
+  compareBox.innerHTML = multiStoreGroups.map(group => {
+    const sorted = [...group.entries].sort((a,b) => a.hargaUnit - b.hargaUnit);
+    const termurah = sorted[0], termahal = sorted[sorted.length-1];
+    return `<div class="ing-card">
+      <div class="ing-head"><div class="name">${group.bahan} <span class="tag">${group.entries.length} kedai</span></div></div>
+      <div style="font-size:0.8rem; line-height:1.7;">
+        <div>🟢 Termurah: <strong>${fmt(termurah.hargaUnit)}</strong>/${termurah.unit} di <strong>${termurah.kedai||'-'}</strong></div>
+        <div>🔴 Termahal: <strong>${fmt(termahal.hargaUnit)}</strong>/${termahal.unit} di <strong>${termahal.kedai||'-'}</strong></div>
+      </div></div>`;
+  }).join('');
+
+  listEl.innerHTML = [...DATA.purchases].map(p => {
+    const hargaUnitKarton = (p.hargaKarton && p.kuantitiKarton) ? (p.hargaKarton / p.kuantitiKarton) : null;
+    return `
+    <div class="ing-card">
+      <div class="ing-head">
+        <div class="name">${p.bahan}${p.kedai ? ' · <span class="tag">'+p.kedai+'</span>' : ''}</div>
+        <div class="actions">
+          <button onclick="editPurchase('${p.id}')">✎</button>
+          <button class="del" onclick="deleteItem('purchases','${p.id}')">✕</button>
+        </div>
+      </div>
+      <div class="ing-grid">
+        <div><div class="lbl">Berat</div><div class="val">${p.berat} ${p.unit}</div></div>
+        <div><div class="lbl">Harga/Unit</div><div class="val">${fmt(p.hargaUnit)}</div></div>
+        <div><div class="lbl">Kuantiti/Karton</div><div class="val">${p.kuantitiKarton || '-'}</div></div>
+        <div><div class="lbl">Harga Karton</div><div class="val">${p.hargaKarton ? fmt(p.hargaKarton) : '-'}</div></div>
+        <div><div class="lbl">Harga/Unit Jika Beli Karton</div><div class="val" style="color:var(--primary-dark)">${hargaUnitKarton ? fmt(hargaUnitKarton) : '-'}</div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderPayroll() {
+  const el = document.getElementById('payrollList');
+  const today = todayStr();
+  el.innerHTML = DATA.payroll.length === 0 ? '<div class="empty">Belum ada rekod gaji.</div>' :
+    [...DATA.payroll].sort((a,b)=>new Date(a.tarikhBayar)-new Date(b.tarikhBayar)).map(p => {
+      const isDue = p.tarikhBayar <= today;
+      return `
+      <div class="list-item">
+        <div class="info">
+          <div class="t1">${p.nama} <span class="tag ${isDue?'':'warn'}">${isDue ? 'Ditolak dari Akaun' : 'Akan Datang'}</span></div>
+          <div class="t2">Perlu dibayar: ${p.tarikhBayar} · ${p.kaedah || 'Cash'}</div>
+        </div>
+        <div class="amt" style="color:var(--negative)">${fmt(p.jumlah)}</div>
+        <button class="del" onclick="deleteItem('payroll','${p.id}')">✕</button>
+      </div>`;
+    }).join('');
+}
+
+// ---------- Hutang ----------
+function renderDebts() {
+  const el = document.getElementById('debtList');
+  if (DATA.debts.length === 0) { el.innerHTML = '<div class="empty">Tiada hutang direkod. Tekan + untuk tambah.</div>'; return; }
+  el.innerHTML = [...DATA.debts].map(d => `
+    <div class="ing-card">
+      <div class="ing-head">
+        <div class="name">${d.pemiutang} <span class="tag ${d.status==='selesai'?'':'warn'}">${d.status==='selesai'?'Selesai':'Aktif'}</span></div>
+        <div class="actions">
+          <button onclick="bayarHutang('${d.id}')">💵</button>
+          <button onclick="editDebt('${d.id}')">✎</button>
+          <button class="del" onclick="deleteItem('debts','${d.id}')">✕</button>
+        </div>
+      </div>
+      <div class="ing-grid">
+        <div><div class="lbl">Jumlah Asal</div><div class="val">${fmt(d.jumlah)}</div></div>
+        <div><div class="lbl">Baki</div><div class="val">${fmt(d.baki)}</div></div>
+        <div><div class="lbl">Bayaran Bulanan</div><div class="val">${d.bayaranBulanan ? fmt(d.bayaranBulanan) : '-'}</div></div>
+        <div><div class="lbl">Tarikh Akhir</div><div class="val">${d.tarikhAkhir || '-'}</div></div>
+      </div>
+    </div>`).join('');
+}
+
+function editDebt(id) { editingDebtId = id; openModal('debt'); }
+
+async function bayarHutang(id) {
+  const d = DATA.debts.find(x => x.id === id);
+  if (!d) return;
+  const input = prompt('Jumlah bayaran untuk ' + d.pemiutang + ' (baki semasa ' + fmt(d.baki) + '):', '');
+  const amt = parseFloat(input);
+  if (!amt || amt <= 0) return;
+  const newBaki = Math.max(0, d.baki - amt);
+  const newStatus = newBaki === 0 ? 'selesai' : d.status;
+  const { error } = await supabaseClient.from('debts').update({ baki: newBaki, status: newStatus }).eq('id', id);
+  if (error) { alert('Gagal simpan ke pangkalan data: ' + error.message); return; }
+  d.baki = newBaki; d.status = newStatus;
+  renderAll();
+}
+
+// ---------- Laporan ----------
+function renderLaporan() {
+  const monthInput = document.getElementById('laporanBulan');
+  if (!monthInput.value) monthInput.value = todayStr().slice(0,7);
+  const bulan = monthInput.value;
+  const inMonth = (tarikh) => tarikh && tarikh.slice(0,7) === bulan;
+
+  const masuk = DATA.income.filter(x => inMonth(x.tarikh));
+  const keluar = DATA.expense.filter(x => inMonth(x.tarikh));
+  const gaji = DATA.payroll.filter(x => inMonth(x.tarikhBayar));
+
+  const totalMasuk = masuk.reduce((s,x)=>s+Number(x.jumlah),0);
+  const totalKeluar = keluar.reduce((s,x)=>s+Number(x.jumlah),0);
+  const totalGaji = gaji.reduce((s,x)=>s+Number(x.jumlah),0);
+
+  document.getElementById('lapMasuk').textContent = fmt(totalMasuk);
+  document.getElementById('lapKeluar').textContent = fmt(totalKeluar);
+  document.getElementById('lapGaji').textContent = fmt(totalGaji);
+  const bersihEl = document.getElementById('lapBersih');
+  const bersih = totalMasuk - totalKeluar - totalGaji;
+  bersihEl.textContent = fmt(bersih);
+  bersihEl.className = 'card-value num ' + (bersih >= 0 ? 'positive' : 'negative');
+
+  const idTime = (id) => { const m = String(id).match(/\d+/); return m ? parseInt(m[0]) : 0; };
+  const all = [
+    ...masuk.map(x=>({...x, jenis:'masuk', label:'💰 '+(x.sumber||'Jualan')+' · '+(x.kaedah||'Cash')})),
+    ...keluar.map(x=>({...x, jenis:'keluar', label:'🧾 '+(x.item||'-')+' · '+(x.kaedah||'Cash')})),
+    ...gaji.map(x=>({...x, jenis:'keluar', label:'👥 Gaji '+x.nama, tarikh:x.tarikhBayar})),
+  ].sort((a,b)=>{ const d=new Date(b.tarikh)-new Date(a.tarikh); return d!==0?d:idTime(b.id)-idTime(a.id); });
+
+  const lapList = document.getElementById('lapList');
+  lapList.innerHTML = all.length === 0 ? '<div class="empty">Tiada rekod bulan ini.</div>' :
+    all.map(x => `
+      <div class="list-item">
+        <div class="info"><div class="t1">${x.label}</div><div class="t2">${x.tarikh}</div></div>
+        <div class="amt" style="color:${x.jenis==='masuk'?'var(--positive)':'var(--negative)'}">${x.jenis==='masuk'?'+':'-'}${fmt(x.jumlah)}</div>
+      </div>`).join('');
+}
+
+// ---------- Carian ----------
+function renderSearch() {
+  const box = document.getElementById('searchBox');
+  const q = (box.value || '').trim().toLowerCase();
+  const el = document.getElementById('searchResults');
+  if (!q) { el.innerHTML = '<div class="empty">Taip untuk cari merentas semua modul.</div>'; return; }
+
+  const results = [];
+  DATA.income.forEach(x => { if ((x.sumber||'').toLowerCase().includes(q)) results.push({label:'💰 '+x.sumber, sub:'Duit Masuk · '+x.tarikh, jumlah:x.jumlah, jenis:'masuk'}); });
+  DATA.expense.forEach(x => { if ((x.item||'').toLowerCase().includes(q)) results.push({label:'🧾 '+x.item, sub:'Duit Keluar · '+x.tarikh, jumlah:x.jumlah, jenis:'keluar'}); });
+  DATA.purchases.forEach(x => { if ((x.bahan||'').toLowerCase().includes(q) || (x.kedai||'').toLowerCase().includes(q)) results.push({label:'🛒 '+x.bahan, sub:(x.kedai||'-')+' · '+fmt(x.hargaUnit)+'/'+x.unit, jumlah:null, jenis:'ref'}); });
+  DATA.payroll.forEach(x => { if ((x.nama||'').toLowerCase().includes(q)) results.push({label:'👥 '+x.nama, sub:'Gaji · perlu dibayar '+x.tarikhBayar, jumlah:x.jumlah, jenis:'keluar'}); });
+  DATA.debts.forEach(x => { if ((x.pemiutang||'').toLowerCase().includes(q)) results.push({label:'📉 '+x.pemiutang, sub:'Hutang · baki '+fmt(x.baki), jumlah:null, jenis:'ref'}); });
+
+  el.innerHTML = results.length === 0 ? '<div class="empty">Tiada hasil dijumpai.</div>' :
+    results.map(r => `
+      <div class="list-item">
+        <div class="info"><div class="t1">${r.label}</div><div class="t2">${r.sub}</div></div>
+        ${r.jumlah !== null ? `<div class="amt" style="color:${r.jenis==='masuk'?'var(--positive)':'var(--negative)'}">${fmt(r.jumlah)}</div>` : ''}
+      </div>`).join('');
+}
+
+function editPurchase(id) {
+  editingPurchaseId = id;
+  openModal('purchase');
+}
+
+async function deleteItem(type, id) {
+  const { error } = await supabaseClient.from(type).delete().eq('id', id);
+  if (error) { alert('Gagal padam: ' + error.message); return; }
+  DATA[type] = DATA[type].filter(x => x.id !== id);
+  renderAll();
+}
+
+// ---------- Navigasi ----------
+document.querySelectorAll('.bottomnav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentPage = btn.dataset.page;
+    document.querySelectorAll('.bottomnav button').forEach(b => b.classList.toggle('active', b===btn));
+    document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-'+currentPage));
+    document.getElementById('fabAdd').classList.toggle('hidden-fab', ['dashboard','laporan','carian'].includes(currentPage));
+  });
+});
+
+// ---------- Modal ----------
+const modalBg = document.getElementById('modalBg');
+const modalFields = document.getElementById('modalFields');
+const modalTitle = document.getElementById('modalTitle');
+
+document.getElementById('fabAdd').addEventListener('click', () => {
+  const map = { masuk: 'income', keluar: 'expense', beli: 'purchase', gaji: 'payroll', akaun: 'saldo', hutang: 'debt' };
+  if (currentPage === 'beli') editingPurchaseId = null;
+  if (currentPage === 'hutang') editingDebtId = null;
+  openModal(map[currentPage] || 'income');
+});
+document.getElementById('btnEditSaldo').addEventListener('click', () => openModal('saldo'));
+
+function openModal(type) {
+  modalBg.dataset.type = type;
+  if (type === 'income') {
+    modalTitle.textContent = '💰 Tambah Duit Masuk';
+    modalFields.innerHTML = `
+      <div class="field"><label>Tarikh</label><input type="date" id="f_tarikh" value="${todayStr()}"></div>
+      <div class="field"><label>Sumber</label><input type="text" id="f_sumber" placeholder="cth: Jualan Tart"></div>
+      <div class="field"><label>Kaedah Terima</label>
+        <select id="f_kaedah">
+          <option>Cash</option><option>QR</option><option>Transfer</option>
+        </select>
+      </div>
+      <div class="field"><label>Jumlah (RM)</label><input type="number" id="f_jumlah" step="0.01" placeholder="0.00"></div>
+      <div class="field"><label>Catatan</label><input type="text" id="f_catatan" placeholder="pilihan"></div>`;
+  } else if (type === 'expense') {
+    modalTitle.textContent = '🧾 Tambah Duit Keluar';
+    modalFields.innerHTML = `
+      <div class="field"><label>Tarikh</label><input type="date" id="f_tarikh" value="${todayStr()}"></div>
+      <div class="field"><label>Untuk Apa</label><input type="text" id="f_item" list="itemSuggest" placeholder="cth: Sewa / TNB / Syabas / Bahan Mentah">
+        <datalist id="itemSuggest">
+          <option value="Sewa"><option value="TNB"><option value="Syabas">
+          <option value="Bahan Mentah"><option value="Pembungkusan">
+        </datalist>
+      </div>
+      <div class="field"><label>Kaedah Bayaran</label>
+        <select id="f_kaedah">
+          <option>Cash</option><option>QR</option><option>Kad</option><option>Transfer</option>
+        </select>
+      </div>
+      <div class="field"><label>Jumlah (RM)</label><input type="number" id="f_jumlah" step="0.01" placeholder="0.00"></div>
+      <div class="field"><label>Catatan</label><input type="text" id="f_catatan" placeholder="pilihan"></div>`;
+  } else if (type === 'purchase') {
+    modalTitle.textContent = editingPurchaseId ? '✎ Edit Bahan' : '🛒 Tambah Bahan (Rujukan)';
+    const p = editingPurchaseId ? DATA.purchases.find(x => x.id === editingPurchaseId) : null;
+    modalFields.innerHTML = `
+      <div class="field"><label>Bahan</label><input type="text" id="f_bahan" placeholder="cth: Whipping Cream" value="${p ? p.bahan : ''}"></div>
+      <div class="field"><label>Kedai</label><input type="text" id="f_kedai" placeholder="cth: Lotus / Speedmart" value="${p ? (p.kedai||'') : ''}"></div>
+      <div class="field"><label>Berat</label><input type="number" id="f_berat" step="0.01" placeholder="cth: 1" value="${p ? p.berat : ''}"></div>
+      <div class="field"><label>Unit</label>
+        <select id="f_unit">
+          <option ${p && p.unit==='pcs'?'selected':''}>pcs</option>
+          <option ${p && p.unit==='gm'?'selected':''}>gm</option>
+          <option ${p && p.unit==='kg'?'selected':''}>kg</option>
+          <option ${p && p.unit==='ml'?'selected':''}>ml</option>
+          <option ${p && p.unit==='karton'?'selected':''}>karton</option>
+        </select>
+      </div>
+      <div class="field"><label>Harga / Unit (RM)</label><input type="number" id="f_hargaunit" step="0.01" placeholder="0.00" value="${p ? p.hargaUnit : ''}"></div>
+      <div class="field"><label>Kuantiti dalam Karton</label><input type="number" id="f_kuantitikarton" step="1" placeholder="cth: 24" value="${p ? (p.kuantitiKarton||'') : ''}"></div>
+      <div class="field"><label>Harga Karton (RM)</label><input type="number" id="f_hargakarton" step="0.01" placeholder="0.00" value="${p ? (p.hargaKarton||'') : ''}"></div>`;
+  } else if (type === 'payroll') {
+    modalTitle.textContent = '👥 Tambah Gaji';
+    modalFields.innerHTML = `
+      <div class="field"><label>Nama Pekerja</label><input type="text" id="f_nama"></div>
+      <div class="field"><label>Jumlah Gaji Bulan Ini (RM)</label><input type="number" id="f_jumlah" step="0.01" placeholder="0.00"></div>
+      <div class="field"><label>Kaedah Bayaran</label>
+        <select id="f_kaedah"><option>Cash</option><option>Transfer</option></select>
+      </div>
+      <div class="field"><label>Tarikh Perlu Dibayar</label><input type="date" id="f_tarikhbayar" value="${todayStr()}"></div>`;
+  } else if (type === 'saldo') {
+    modalTitle.textContent = '🏦 Edit Baki Bermula';
+    modalFields.innerHTML = `
+      <div class="field"><label>Cash Bermula (RM)</label><input type="number" id="f_cash" step="0.01" value="${DATA.startingCash}"></div>
+      <div class="field"><label>Bank Bermula (RM)</label><input type="number" id="f_bank" step="0.01" value="${DATA.startingBank}"></div>`;
+  } else if (type === 'debt') {
+    const d = editingDebtId ? DATA.debts.find(x => x.id === editingDebtId) : null;
+    modalTitle.textContent = editingDebtId ? '✎ Edit Hutang' : '📉 Tambah Hutang';
+    modalFields.innerHTML = `
+      <div class="field"><label>Nama Pemiutang</label><input type="text" id="f_pemiutang" placeholder="cth: Bank / Pembekal" value="${d ? d.pemiutang : ''}"></div>
+      <div class="field"><label>Jumlah Hutang Asal (RM)</label><input type="number" id="f_jumlahhutang" step="0.01" value="${d ? d.jumlah : ''}"></div>
+      <div class="field"><label>Bayaran Bulanan (RM)</label><input type="number" id="f_bayaranbulanan" step="0.01" placeholder="pilihan" value="${d ? (d.bayaranBulanan||'') : ''}"></div>
+      <div class="field"><label>Tarikh Akhir</label><input type="date" id="f_tarikhakhir" value="${d ? (d.tarikhAkhir||'') : ''}"></div>`;
+  }
+  modalBg.classList.add('show');
+}
+
+document.getElementById('modalCancel').addEventListener('click', () => { editingPurchaseId = null; editingDebtId = null; modalBg.classList.remove('show'); });
+
+document.getElementById('modalSave').addEventListener('click', async () => {
+  const type = modalBg.dataset.type;
+  const saveBtn = document.getElementById('modalSave');
+  saveBtn.disabled = true;
+
+  try {
+    if (type === 'saldo') {
+      const cash = parseFloat(document.getElementById('f_cash').value) || 0;
+      const bank = parseFloat(document.getElementById('f_bank').value) || 0;
+      const { error } = await supabaseClient.from('settings').upsert({ user_id: currentUserId, starting_cash: cash, starting_bank: bank });
+      if (error) throw error;
+      DATA.startingCash = cash; DATA.startingBank = bank;
+      renderAll(); modalBg.classList.remove('show'); return;
+    }
+
+    if (type === 'debt') {
+      const pemiutang = document.getElementById('f_pemiutang').value.trim();
+      const jumlah = parseFloat(document.getElementById('f_jumlahhutang').value);
+      if (!pemiutang || !jumlah || jumlah <= 0) { alert('Sila isi nama pemiutang & jumlah yang sah.'); return; }
+      const bayaranBulanan = parseFloat(document.getElementById('f_bayaranbulanan').value) || 0;
+      const tarikhAkhir = document.getElementById('f_tarikhakhir').value || null;
+
+      if (editingDebtId) {
+        const { data, error } = await supabaseClient.from('debts')
+          .update({ pemiutang, jumlah, bayaran_bulanan: bayaranBulanan, tarikh_akhir: tarikhAkhir })
+          .eq('id', editingDebtId).select().single();
+        if (error) throw error;
+        const idx = DATA.debts.findIndex(x => x.id === editingDebtId);
+        if (idx > -1) DATA.debts[idx] = mapDebtFromDb(data);
+        editingDebtId = null;
+      } else {
+        const { data, error } = await supabaseClient.from('debts')
+          .insert({ user_id: currentUserId, pemiutang, jumlah, baki: jumlah, bayaran_bulanan: bayaranBulanan, tarikh_akhir: tarikhAkhir, status: 'aktif' })
+          .select().single();
+        if (error) throw error;
+        DATA.debts.push(mapDebtFromDb(data));
+      }
+      renderAll(); modalBg.classList.remove('show'); return;
+    }
+
+    if (type === 'payroll') {
+      const nama = document.getElementById('f_nama').value.trim();
+      const jumlah = parseFloat(document.getElementById('f_jumlah').value);
+      if (!nama || !jumlah || jumlah <= 0) { alert('Sila isi nama & jumlah yang sah.'); return; }
+      const { data, error } = await supabaseClient.from('payroll')
+        .insert({ user_id: currentUserId, nama, jumlah, kaedah: document.getElementById('f_kaedah').value, tarikh_bayar: document.getElementById('f_tarikhbayar').value })
+        .select().single();
+      if (error) throw error;
+      DATA.payroll.push(mapPayrollFromDb(data));
+      renderAll(); modalBg.classList.remove('show'); return;
+    }
+
+    if (type === 'purchase') {
+      const bahan = document.getElementById('f_bahan').value.trim();
+      const hargaUnit = parseFloat(document.getElementById('f_hargaunit').value);
+      if (!bahan || !hargaUnit || hargaUnit <= 0) { alert('Sila isi bahan & harga/unit yang sah.'); return; }
+      const record = {
+        bahan,
+        kedai: document.getElementById('f_kedai').value,
+        berat: parseFloat(document.getElementById('f_berat').value) || 0,
+        unit: document.getElementById('f_unit').value,
+        harga_unit: hargaUnit,
+        kuantiti_karton: parseFloat(document.getElementById('f_kuantitikarton').value) || 0,
+        harga_karton: parseFloat(document.getElementById('f_hargakarton').value) || 0,
+      };
+      if (editingPurchaseId) {
+        const { data, error } = await supabaseClient.from('purchases').update(record).eq('id', editingPurchaseId).select().single();
+        if (error) throw error;
+        const idx = DATA.purchases.findIndex(x => x.id === editingPurchaseId);
+        if (idx > -1) DATA.purchases[idx] = mapPurchaseFromDb(data);
+        editingPurchaseId = null;
+      } else {
+        const { data, error } = await supabaseClient.from('purchases').insert({ user_id: currentUserId, ...record }).select().single();
+        if (error) throw error;
+        DATA.purchases.push(mapPurchaseFromDb(data));
+      }
+      renderAll(); modalBg.classList.remove('show'); return;
+    }
+
+    const jumlah = parseFloat(document.getElementById('f_jumlah').value);
+    if (!jumlah || jumlah <= 0) { alert('Sila isi jumlah yang sah.'); return; }
+    const tarikh = document.getElementById('f_tarikh').value;
+    const catatan = document.getElementById('f_catatan') ? document.getElementById('f_catatan').value : '';
+
+    if (type === 'income') {
+      const { data, error } = await supabaseClient.from('income')
+        .insert({ user_id: currentUserId, tarikh, sumber: document.getElementById('f_sumber').value, kaedah: document.getElementById('f_kaedah').value, jumlah, catatan })
+        .select().single();
+      if (error) throw error;
+      DATA.income.push(data);
+    } else if (type === 'expense') {
+      const { data, error } = await supabaseClient.from('expense')
+        .insert({ user_id: currentUserId, tarikh, item: document.getElementById('f_item').value, kaedah: document.getElementById('f_kaedah').value, jumlah, catatan })
+        .select().single();
+      if (error) throw error;
+      DATA.expense.push(data);
+    }
+    renderAll(); modalBg.classList.remove('show');
+  } catch (err) {
+    alert('Gagal simpan ke pangkalan data: ' + err.message);
+  } finally {
+    saveBtn.disabled = false;
+  }
+});
+
+// ---------- Carian / Laporan / Backup ----------
+document.getElementById('searchBox').addEventListener('input', renderSearch);
+document.getElementById('laporanBulan').addEventListener('change', renderLaporan);
+
+document.getElementById('btnExport').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(DATA, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'dapur-ibu-backup-' + todayStr() + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('btnImportTrigger').addEventListener('click', () => document.getElementById('importFile').click());
+document.getElementById('importFile').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (ev) => {
+    try {
+      const imported = JSON.parse(ev.target.result);
+      for (const x of (imported.income || [])) {
+        await supabaseClient.from('income').insert({ user_id: currentUserId, tarikh: x.tarikh, sumber: x.sumber, kaedah: x.kaedah || 'Cash', jumlah: x.jumlah, catatan: x.catatan });
+      }
+      for (const x of (imported.expense || [])) {
+        await supabaseClient.from('expense').insert({ user_id: currentUserId, tarikh: x.tarikh, item: x.item, kaedah: x.kaedah || 'Cash', jumlah: x.jumlah, catatan: x.catatan });
+      }
+      for (const x of (imported.purchases || [])) {
+        await supabaseClient.from('purchases').insert({ user_id: currentUserId, bahan: x.bahan, kedai: x.kedai, berat: x.berat, unit: x.unit || 'pcs', harga_unit: x.hargaUnit, kuantiti_karton: x.kuantitiKarton, harga_karton: x.hargaKarton });
+      }
+      for (const x of (imported.payroll || [])) {
+        await supabaseClient.from('payroll').insert({ user_id: currentUserId, nama: x.nama, jumlah: x.jumlah, kaedah: x.kaedah || 'Cash', tarikh_bayar: x.tarikhBayar });
+      }
+      for (const x of (imported.debts || [])) {
+        await supabaseClient.from('debts').insert({ user_id: currentUserId, pemiutang: x.pemiutang, jumlah: x.jumlah, baki: x.baki, bayaran_bulanan: x.bayaranBulanan, tarikh_akhir: x.tarikhAkhir, status: x.status || 'aktif' });
+      }
+      if (imported.startingCash != null || imported.startingBank != null) {
+        await supabaseClient.from('settings').upsert({ user_id: currentUserId, starting_cash: imported.startingCash || 0, starting_bank: imported.startingBank || 0 });
+      }
+      await loadData();
+      alert('Data berjaya diimport.');
+    } catch (err) {
+      alert('Fail tidak sah / gagal import: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+</script>
+</body>
+</html>
