@@ -1,0 +1,1896 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stok Legasi Dapur Ibu</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --plum:#5b3358;
+    --plum-soft:#7a4d76;
+    --blush:#f9e7ee;
+    --blush-deep:#f3d2e0;
+    --lav:#c98fc4;
+    --lav-deep:#a668a0;
+    --gold:#c9a15a;
+    --cream:#fffaf7;
+    --ink:#3c2a3a;
+    --line:#ecd9e2;
+    --danger:#b5495b;
+    --danger-bg:#fbe9ec;
+    --ok:#4f8f6e;
+    --ok-bg:#e9f5ee;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+    background:linear-gradient(180deg,var(--blush) 0%, var(--cream) 320px);
+    color:var(--ink);
+    padding-bottom:60px;
+  }
+  header{
+    padding:28px 20px 22px;
+    text-align:center;
+  }
+  header h1{
+    font-family:'Georgia','Times New Roman',serif;
+    font-style:italic;
+    font-size:1.7rem;
+    margin:0 0 4px;
+    color:var(--plum);
+    letter-spacing:0.3px;
+  }
+  header p{
+    margin:0;
+    font-size:0.8rem;
+    color:var(--lav-deep);
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+  }
+  .tabs{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    padding:0 14px;
+    max-width:720px;
+    margin:0 auto 18px;
+  }
+  .tab-btn{
+    flex:1 1 30%;
+    padding:10px 4px;
+    border:none;
+    border-radius:12px;
+    background:#fff;
+    color:var(--plum-soft);
+    font-size:0.64rem;
+    font-weight:700;
+    letter-spacing:0.3px;
+    cursor:pointer;
+    box-shadow:0 1px 3px rgba(91,51,88,0.12);
+    transition:all .15s ease;
+  }
+  .tab-btn.active{
+    background:linear-gradient(135deg,var(--lav) 0%, var(--plum) 100%);
+    color:#fff;
+    box-shadow:0 3px 10px rgba(91,51,88,0.28);
+  }
+  main{
+    max-width:720px;
+    margin:0 auto;
+    padding:0 14px;
+  }
+  .panel{
+    display:none;
+  }
+  .panel.active{
+    display:block;
+    animation:fade .2s ease;
+  }
+  @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+  .card{
+    background:#fff;
+    border-radius:16px;
+    padding:18px;
+    margin-bottom:16px;
+    box-shadow:0 2px 10px rgba(91,51,88,0.08);
+    border:1px solid var(--line);
+  }
+  .card h2{
+    font-size:0.95rem;
+    margin:0 0 14px;
+    color:var(--plum);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .card h2 .dot{
+    width:7px;height:7px;border-radius:50%;
+    background:var(--gold);
+    display:inline-block;
+  }
+  .field-row{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:10px;
+    margin-bottom:12px;
+  }
+  .two-col{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+  }
+  label{
+    font-size:0.72rem;
+    font-weight:600;
+    color:var(--plum-soft);
+    margin-bottom:4px;
+    display:block;
+  }
+  input[type=text], input[type=number], select{
+    width:100%;
+    padding:10px 11px;
+    border-radius:10px;
+    border:1.5px solid var(--line);
+    font-size:0.88rem;
+    background:var(--cream);
+    color:var(--ink);
+  }
+  input:focus, select:focus{
+    outline:none;
+    border-color:var(--lav);
+  }
+  .unit-pair{
+    display:grid;
+    grid-template-columns:1fr 90px;
+    gap:8px;
+  }
+  button.primary{
+    width:100%;
+    padding:12px;
+    border:none;
+    border-radius:10px;
+    background:linear-gradient(135deg,var(--lav) 0%, var(--plum) 100%);
+    color:#fff;
+    font-weight:700;
+    font-size:0.85rem;
+    cursor:pointer;
+    margin-top:4px;
+  }
+  button.primary.out{
+    background:linear-gradient(135deg,#e0a9ae 0%, var(--danger) 100%);
+  }
+  button.primary:active{ opacity:0.85; }
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:0.78rem;
+    min-width:560px;
+  }
+  .table-scroll{
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    margin:0 -4px;
+    padding:0 4px;
+  }
+  th{
+    text-align:left;
+    padding:8px 6px;
+    color:var(--lav-deep);
+    font-size:0.68rem;
+    text-transform:uppercase;
+    letter-spacing:0.4px;
+    border-bottom:1.5px solid var(--line);
+  }
+  td{
+    padding:9px 6px;
+    border-bottom:1px solid var(--line);
+    vertical-align:middle;
+  }
+  tr:last-child td{border-bottom:none;}
+  .rm-btn{
+    background:var(--danger-bg);
+    color:var(--danger);
+    border:none;
+    border-radius:8px;
+    padding:6px 9px;
+    font-size:0.7rem;
+    font-weight:700;
+    cursor:pointer;
+  }
+  .badge{
+    display:inline-block;
+    padding:3px 9px;
+    border-radius:20px;
+    font-size:0.68rem;
+    font-weight:700;
+  }
+  .badge.ok{ background:var(--ok-bg); color:var(--ok); }
+  .badge.out{ background:var(--danger-bg); color:var(--danger); }
+  .empty{
+    text-align:center;
+    color:#b39aad;
+    font-size:0.8rem;
+    padding:20px 0;
+  }
+  .helper{
+    font-size:0.72rem;
+    color:#a888a5;
+    margin-top:2px;
+  }
+  .save-msg{
+    font-size:0.72rem;
+    color:var(--ok);
+    text-align:center;
+    height:16px;
+    margin-top:6px;
+  }
+  .stock-num{
+    font-weight:700;
+    color:var(--plum);
+  }
+  .price-num{
+    color:var(--gold);
+    font-weight:600;
+  }
+  .history-wrap{
+    margin-top:14px;
+    padding-top:12px;
+    border-top:1px dashed var(--line);
+  }
+  .history-wrap h3{
+    font-size:0.7rem;
+    text-transform:uppercase;
+    letter-spacing:0.4px;
+    color:var(--lav-deep);
+    margin:0 0 8px;
+  }
+  .history-wrap table{
+    font-size:0.72rem;
+  }
+  .del-btn{
+    background:none;
+    border:none;
+    color:#c4a8bd;
+    font-size:0.85rem;
+    cursor:pointer;
+    padding:2px 6px;
+  }
+  .auto-tag{
+    color:var(--gold);
+    font-weight:600;
+    text-transform:none;
+    letter-spacing:0;
+  }
+  input[readonly]{
+    background:var(--blush);
+    color:var(--plum-soft);
+    font-weight:700;
+    cursor:not-allowed;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Legasi Dapur Ibu</h1>
+  <p>Sistem Stok &amp; Bahan</p>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="ingredient">INGREDIENT</button>
+  <button class="tab-btn" data-tab="packaging">PACKAGING</button>
+  <button class="tab-btn" data-tab="movement">STOCK MOVEMENT</button>
+  <button class="tab-btn" data-tab="summary">BAKI STOK</button>
+  <button class="tab-btn" data-tab="kosproduk">KOS PRODUK</button>
+  <button class="tab-btn" data-tab="kedai">PERBANDINGAN KEDAI</button>
+</div>
+
+<div style="max-width:720px;margin:0 auto 14px;padding:0 14px;display:flex;gap:8px;">
+  <button id="btn-export" style="flex:1;padding:9px;border-radius:10px;border:1.5px solid var(--line);background:#fff;color:var(--plum-soft);font-size:0.72rem;font-weight:700;cursor:pointer;">⬇ Backup Data</button>
+  <label style="flex:1;">
+    <input type="file" id="file-import" accept="application/json" style="display:none;">
+    <span id="btn-import" style="display:block;text-align:center;padding:9px;border-radius:10px;border:1.5px solid var(--line);background:#fff;color:var(--plum-soft);font-size:0.72rem;font-weight:700;cursor:pointer;">⬆ Import Backup</span>
+  </label>
+</div>
+<div id="storage-warning" style="display:none;max-width:720px;margin:0 auto 14px;padding:0 14px;">
+  <div style="background:var(--danger-bg);color:var(--danger);border-radius:10px;padding:10px 12px;font-size:0.72rem;line-height:1.4;">
+    ⚠️ Tidak dapat sambung ke pangkalan data (Supabase). Sila semak sambungan internet dan cuba refresh halaman ni. Data terkini mungkin belum disimpan.
+  </div>
+</div>
+<div id="connection-status" style="max-width:720px;margin:0 auto 10px;padding:0 14px;text-align:center;font-size:0.68rem;color:#b39aad;">Menyambung ke pangkalan data...</div>
+
+<main>
+
+  <!-- INGREDIENT & DECORATION shared template rendered via JS -->
+  <div class="panel active" id="panel-ingredient"></div>
+  <div class="panel" id="panel-packaging"></div>
+
+  <!-- STOCK MOVEMENT -->
+  <div class="panel" id="panel-movement">
+    <div class="card">
+      <h2><span class="dot"></span>Stock In</h2>
+      <div class="field-row">
+        <div>
+          <label>Pilih Item</label>
+          <select id="in-item"></select>
+        </div>
+        <div class="two-col">
+          <div>
+            <label>Kuantiti Masuk</label>
+            <input type="number" id="in-qty" min="0" step="any" placeholder="0">
+          </div>
+          <div>
+            <label>Unit</label>
+            <select id="in-unit">
+              <option value="karton">Karton</option>
+              <option value="kg">KG</option>
+              <option value="g">Gram</option>
+              <option value="pcs">PCS</option>
+            </select>
+          </div>
+        </div>
+        <div id="in-cartonweight-wrap">
+          <div class="unit-pair">
+            <div>
+              <label>Kuantiti dalam Karton <span class="auto-tag">(auto)</span></label>
+              <input type="number" id="in-cartonweight" min="0" step="any" placeholder="0" readonly>
+            </div>
+            <div>
+              <label>Unit dalam Karton</label>
+              <select id="in-cartonsubunit">
+                <option value="pack">Pack</option>
+                <option value="pcs">PCS</option>
+                <option value="kg">KG</option>
+                <option value="g">Gram</option>
+              </select>
+            </div>
+          </div>
+          <div class="helper" id="in-cartonweight-hint"></div>
+        </div>
+      </div>
+      <button class="primary" id="btn-stock-in">+ Stock In</button>
+      <div id="in-history"></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="dot"></span>Stock Out</h2>
+      <div class="field-row">
+        <div>
+          <label>Pilih Item</label>
+          <select id="out-item"></select>
+        </div>
+        <div class="two-col">
+          <div>
+            <label>Kuantiti Diambil</label>
+            <input type="number" id="out-qty" min="0" step="any" placeholder="0">
+          </div>
+          <div>
+            <label>Unit</label>
+            <select id="out-unit">
+              <option value="karton">Karton</option>
+              <option value="kg">KG</option>
+              <option value="g">Gram</option>
+              <option value="pcs">PCS</option>
+            </select>
+          </div>
+        </div>
+        <div id="out-cartonweight-wrap">
+          <div class="unit-pair">
+            <div>
+              <label>Kuantiti dalam Karton <span class="auto-tag">(auto)</span></label>
+              <input type="number" id="out-cartonweight" min="0" step="any" placeholder="0" readonly>
+            </div>
+            <div>
+              <label>Unit dalam Karton</label>
+              <select id="out-cartonsubunit">
+                <option value="pack">Pack</option>
+                <option value="pcs">PCS</option>
+                <option value="kg">KG</option>
+                <option value="g">Gram</option>
+              </select>
+            </div>
+          </div>
+          <div class="helper" id="out-cartonweight-hint"></div>
+        </div>
+      </div>
+      <button class="primary out" id="btn-stock-out">− Stock Out</button>
+      <div class="save-msg" id="movement-msg"></div>
+      <div id="out-history"></div>
+    </div>
+  </div>
+
+  <!-- BAKI STOK -->
+  <div class="panel" id="panel-summary">
+    <div class="card">
+      <h2><span class="dot"></span>Baki Stok Terkini</h2>
+      <div id="movement-table"></div>
+    </div>
+    <div class="card">
+      <h2><span class="dot"></span>Jumlah Nilai Inventori Keseluruhan</h2>
+      <div id="grand-total-value"></div>
+    </div>
+  </div>
+
+  <!-- KOS PRODUK -->
+  <div class="panel" id="panel-kosproduk">
+    <div class="card">
+      <h2><span class="dot"></span>Senarai Resepi</h2>
+      <div id="recipe-chips"></div>
+      <div class="field-row" style="margin-top:10px;">
+        <div>
+          <label>Nama Resepi/Produk Baru</label>
+          <input type="text" id="recipe-name" placeholder="cth: Shell Tart Original">
+        </div>
+        <div class="unit-pair">
+          <div>
+            <label>Hasil (bilangan)</label>
+            <input type="number" id="recipe-yield" placeholder="cth: 12">
+          </div>
+          <div>
+            <label>Unit</label>
+            <select id="recipe-yield-unit">
+              <option value="pcs">pcs</option>
+              <option value="biji">biji</option>
+              <option value="kotak">kotak</option>
+              <option value="set">set</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <button class="primary" id="btn-add-recipe">+ Cipta Resepi Baru</button>
+    </div>
+
+    <div class="card" id="recipe-detail-card" style="display:none;">
+      <h2 id="recipe-title"><span class="dot"></span>Butiran Resepi</h2>
+
+      <div class="field-row">
+        <div>
+          <label>Pilih Bahan (Ingredient/Packaging)</label>
+          <select id="item-select"></select>
+        </div>
+        <div class="two-col">
+          <div>
+            <label>Kuantiti Digunakan</label>
+            <input type="number" id="item-qty" step="any" placeholder="0">
+          </div>
+          <div>
+            <label>Unit</label>
+            <select id="item-qty-unit">
+              <option value="g">gram</option>
+              <option value="kg">kg</option>
+              <option value="pcs">pcs</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <button class="primary" id="btn-add-item">+ Tambah Bahan ke Resepi</button>
+      <div class="helper">Pilih unit ikut cara Ibu nak masukkan kuantiti — sistem tukar sendiri kalau berbeza dari unit asal bahan.</div>
+
+      <div style="margin-top:10px;">
+        <table>
+          <thead><tr><th>Bahan</th><th>Kuantiti</th><th>Kos</th><th></th></tr></thead>
+          <tbody id="recipe-items-body"></tbody>
+        </table>
+        <div id="recipe-items-empty" class="empty" style="display:none;">Belum ada bahan ditambah.</div>
+      </div>
+
+      <div class="history-wrap">
+        <h3>Kos Operasi Tambahan</h3>
+        <div class="two-col" style="grid-template-columns:1fr 1fr 1fr;">
+          <div><label>% Pekerja</label><input type="number" id="pct-labor" value="30"></div>
+          <div><label>% Sewa</label><input type="number" id="pct-rent" value="30"></div>
+          <div><label>% Utiliti</label><input type="number" id="pct-utility" value="30"></div>
+        </div>
+        <div class="helper">Peratus dikira daripada Jumlah Kos Bahan.</div>
+      </div>
+
+      <div class="history-wrap">
+        <div class="summary-row"><span>Jumlah Kos Bahan</span><span id="sum-bahan">RM 0.00</span></div>
+        <div class="summary-row"><span id="lbl-labor">+ Pekerja (30%)</span><span id="sum-labor">RM 0.00</span></div>
+        <div class="summary-row"><span id="lbl-rent">+ Sewa (30%)</span><span id="sum-rent">RM 0.00</span></div>
+        <div class="summary-row"><span id="lbl-utility">+ Utiliti (30%)</span><span id="sum-utility">RM 0.00</span></div>
+        <div class="summary-row total"><span>Jumlah Kos Produk</span><span id="sum-total" class="price-num">RM 0.00</span></div>
+        <div class="summary-row total"><span>Kos Per Unit</span><span id="sum-perunit" class="price-num">RM 0.00</span></div>
+      </div>
+
+      <div class="history-wrap">
+        <h3>Cadangan Harga Jualan</h3>
+        <label>Gandaan (Markup ×)</label>
+        <input type="number" id="markup-mult" value="2" step="0.1">
+        <div class="helper">Contoh: 2 = harga jualan 2× ganda kos per unit.</div>
+        <div class="summary-row total"><span>Cadangan Harga Jualan / Unit</span><span id="sum-sellprice" class="price-num">RM 0.00</span></div>
+        <div class="summary-row"><span>Anggaran Untung / Unit</span><span id="sum-profit">RM 0.00</span></div>
+      </div>
+
+      <div class="history-wrap">
+        <div class="two-col">
+          <button class="primary" id="btn-save-cost-history">💾 Simpan Rekod Kos</button>
+          <button class="primary" id="btn-print-recipe" style="background:linear-gradient(135deg,var(--gold) 0%, var(--plum-soft) 100%);">🖨️ Print Resepi</button>
+        </div>
+        <div class="save-msg" id="cost-history-msg"></div>
+      </div>
+
+      <div class="history-wrap">
+        <h3>Sejarah Kos (rekod tersimpan)</h3>
+        <div class="helper">Simpan setiap kali harga bahan berubah, supaya Ibu boleh banding kos dari semasa ke semasa.</div>
+        <div id="recipe-cost-history"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PERBANDINGAN KEDAI -->
+  <div class="panel" id="panel-kedai">
+    <div class="card">
+      <h2><span class="dot"></span>Tambah Harga Kedai</h2>
+      <div class="field-row">
+        <div>
+          <label>Nama Kedai</label>
+          <input type="text" id="kedai-name" placeholder="cth: Mama Baker Supplies">
+        </div>
+        <div>
+          <label>Nama Bahan</label>
+          <input type="text" id="kedai-item-name" placeholder="cth: Tepung Gandum">
+        </div>
+        <div class="unit-pair">
+          <div>
+            <label>Berat</label>
+            <input type="number" id="kedai-weight" step="any" placeholder="800">
+          </div>
+          <div>
+            <label>Unit</label>
+            <select id="kedai-unit">
+              <option value="g">gram</option>
+              <option value="kg">kg</option>
+              <option value="pcs">pcs</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label>Kuantiti dalam Karton</label>
+          <input type="number" id="kedai-cartonqty" step="any" placeholder="cth: 10">
+        </div>
+        <div>
+          <label>Harga Unit (RM)</label>
+          <input type="number" id="kedai-price" step="0.01" placeholder="3.00">
+        </div>
+        <div>
+          <label>Harga Karton (RM)</label>
+          <input type="number" id="kedai-priceCarton" step="0.01" placeholder="30.00">
+        </div>
+        <div>
+          <label>Harga Unit (bila beli Karton) <span class="auto-tag">(auto)</span></label>
+          <input type="text" id="kedai-priceCartonUnit" readonly placeholder="RM 0.00">
+        </div>
+      </div>
+      <button class="primary" id="btn-add-kedai">+ Tambah Rekod</button>
+      <div class="save-msg" id="kedai-msg"></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="dot"></span>Senarai Mengikut Kedai</h2>
+      <div id="kedai-list"></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="dot"></span>Perbandingan Harga Mengikut Bahan</h2>
+      <div class="helper">Bahan yang sama nama akan dibandingkan antara kedai — kedai paling murah ditanda hijau. Untuk rujukan Ibu sahaja, tidak mempengaruhi Kos Produk.</div>
+      <div id="kedai-comparison"></div>
+    </div>
+  </div>
+
+</main>
+
+<style>
+  .summary-row{ display:flex; justify-content:space-between; padding:6px 0; font-size:0.85rem; }
+  .summary-row.total{ font-weight:800; color:var(--plum); font-size:0.95rem; border-top:1.5px dashed var(--line); margin-top:6px; padding-top:10px; }
+</style>
+
+<script>
+// ====== SUPABASE CONNECTION ======
+const SUPABASE_URL = 'https://zqvqlqndsqnybhrcniso.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpxdnFscW5kc3FueWJocmNuaXNvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQwNjczMjIsImV4cCI6MjA5OTY0MzMyMn0.WQX0M-rmM7_NQQRL3QKxZm4j4W0lK0j4JSDXmvUFzhE';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let items = [];
+let movements = [];
+let loaded = false;
+
+function unitLabel(u){
+  return { karton: 'karton', kg: 'kg', g: 'gram', pcs: 'pcs', pack: 'pack' }[u] || u;
+}
+
+function uid(){ return 'x' + Date.now() + '_' + Math.floor(Math.random()*10000); }
+
+function convertWeight(value, fromUnit, toUnit){
+  if(fromUnit === toUnit) return value;
+  if(fromUnit === 'kg' && toUnit === 'g') return value * 1000;
+  if(fromUnit === 'g' && toUnit === 'kg') return value / 1000;
+  return value;
+}
+
+// ====== DB <-> APP FIELD MAPPING ======
+function dbToItem(row){
+  return {
+    id: row.id,
+    category: row.category,
+    name: row.name,
+    weight: row.weight,
+    unit: row.unit,
+    priceUnit: row.price_unit,
+    cartonWeight: row.carton_qty,
+    priceCarton: row.price_carton
+  };
+}
+function itemToDb(item){
+  return {
+    category: item.category,
+    name: item.name,
+    weight: item.weight,
+    unit: item.unit,
+    price_unit: item.priceUnit,
+    carton_qty: item.cartonWeight,
+    price_carton: item.priceCarton
+  };
+}
+function dbToMovement(row){
+  return {
+    id: row.id,
+    itemId: row.item_id,
+    type: row.type,
+    qty: row.qty,
+    unit: row.unit,
+    weightPerUnit: row.weight_per_unit,
+    cartonSubUnit: row.carton_sub_unit,
+    totalWeight: row.total_weight,
+    resultUnit: row.result_unit,
+    date: row.movement_date
+  };
+}
+function movementToDb(m){
+  return {
+    item_id: m.itemId,
+    type: m.type,
+    qty: m.qty,
+    unit: m.unit,
+    weight_per_unit: m.weightPerUnit,
+    carton_sub_unit: m.cartonSubUnit,
+    total_weight: m.totalWeight,
+    result_unit: m.resultUnit
+  };
+}
+
+function setConnectionStatus(ok, msg){
+  const banner = document.getElementById('storage-warning');
+  const banner_text = banner.querySelector('div');
+  const status = document.getElementById('connection-status');
+  if(ok){
+    banner.style.display = 'none';
+    status.textContent = '🟢 Disambung ke pangkalan data';
+    status.style.color = 'var(--ok)';
+  }else{
+    banner.style.display = 'block';
+    status.textContent = '🔴 Tidak disambung';
+    status.style.color = 'var(--danger)';
+    if(msg){
+      console.error(msg);
+      const detail = msg.message || msg.details || msg.hint || JSON.stringify(msg);
+      if(banner_text) banner_text.innerHTML = `⚠️ Tidak dapat sambung ke pangkalan data (Supabase).<br><b>Butiran ralat:</b> ${detail}`;
+    }
+  }
+}
+
+// ====== LOAD ======
+async function loadItems(){
+  try{
+    const { data: itemRows, error: e1 } = await sb.from('stock_items').select('*').order('created_at');
+    if(e1) throw e1;
+    const { data: moveRows, error: e2 } = await sb.from('stock_movements').select('*').order('movement_date');
+    if(e2) throw e2;
+    items = (itemRows || []).map(dbToItem);
+    movements = (moveRows || []).map(dbToMovement);
+
+    const { data: recipeRows, error: e3 } = await sb.from('recipes').select('*').order('created_at');
+    if(e3) throw e3;
+    const { data: recipeItemRows, error: e4 } = await sb.from('recipe_items').select('*');
+    if(e4) throw e4;
+    const { data: histRows, error: e5 } = await sb.from('recipe_cost_history').select('*').order('saved_date');
+    if(e5) throw e5;
+    const { data: kedaiRows, error: e6 } = await sb.from('kedai_entries').select('*').order('created_at');
+    if(e6) throw e6;
+
+    recipes = (recipeRows || []).map(r => ({
+      id: r.id, name: r.name, yieldQty: r.yield_qty, yieldUnit: r.yield_unit,
+      items: (recipeItemRows || []).filter(ri => ri.recipe_id === r.id).map(ri => ({
+        id: ri.id, itemId: ri.item_id, qty: ri.qty, unit: ri.unit
+      }))
+    }));
+    recipeCostHistory = (histRows || []).map(h => ({
+      id: h.id, recipeId: h.recipe_id, date: h.saved_date,
+      snapshot: {
+        bahan: h.bahan, labor: h.labor, rent: h.rent, utility: h.utility,
+        total: h.total, perUnit: h.per_unit, sellPrice: h.sell_price,
+        laborPct: h.labor_pct, rentPct: h.rent_pct, utilPct: h.utility_pct
+      }
+    }));
+    kedaiEntries = (kedaiRows || []).map(k => ({
+      id: k.id, kedai: k.kedai, itemName: k.item_name, weight: k.weight,
+      unit: k.unit, cartonQty: k.carton_qty, price: k.price, priceCarton: k.price_carton
+    }));
+
+    setConnectionStatus(true);
+  }catch(e){
+    setConnectionStatus(false, e);
+    items = [];
+    movements = [];
+    recipes = [];
+    recipeCostHistory = [];
+    kedaiEntries = [];
+  }
+  loaded = true;
+  renderAll();
+}
+
+// ====== ITEM CRUD ======
+async function insertItemDB(item){
+  const { data, error } = await sb.from('stock_items').insert(itemToDb(item)).select().single();
+  if(error){ setConnectionStatus(false, error); throw error; }
+  setConnectionStatus(true);
+  return dbToItem(data);
+}
+async function deleteItemDB(id){
+  const { error } = await sb.from('stock_items').delete().eq('id', id);
+  if(error){ setConnectionStatus(false, error); throw error; }
+  setConnectionStatus(true);
+}
+async function updateItemDB(id, item){
+  const { data, error } = await sb.from('stock_items').update(itemToDb(item)).eq('id', id).select().single();
+  if(error){ setConnectionStatus(false, error); throw error; }
+  setConnectionStatus(true);
+  return dbToItem(data);
+}
+
+// ====== MOVEMENT CRUD ======
+async function insertMovementDB(movement){
+  const { data, error } = await sb.from('stock_movements').insert(movementToDb(movement)).select().single();
+  if(error){ setConnectionStatus(false, error); throw error; }
+  setConnectionStatus(true);
+  return dbToMovement(data);
+}
+async function deleteMovementDB(id){
+  const { error } = await sb.from('stock_movements').delete().eq('id', id);
+  if(error){ setConnectionStatus(false, error); throw error; }
+  setConnectionStatus(true);
+}
+
+// ====== RECIPE CRUD ======
+async function insertRecipeDB(recipe){
+  const { data, error } = await sb.from('recipes').insert({
+    name: recipe.name, yield_qty: recipe.yieldQty, yield_unit: recipe.yieldUnit
+  }).select().single();
+  if(error){ setConnectionStatus(false, error); throw error; }
+  setConnectionStatus(true);
+  return { id: data.id, name: data.name, yieldQty: data.yield_qty, yieldUnit: data.yield_unit, items: [] };
+}
+async function deleteRecipeDB(id){
+  const { error } = await sb.from('recipes').delete().eq('id', id);
+  if(error){ setConnectionStatus(false, error); throw error; }
+  setConnectionStatus(true);
+}
+async function insertRecipeItemDB(recipeId, itemId, qty, unit){
+  const { data, error } = await sb.from('recipe_items').insert({
+    recipe_id: recipeId, item_id: itemId, qty, unit
+  }).select().single();
+  if(error){ setConnectionStatus(false, error); throw error; }
+  setConnectionStatus(true);
+  return { id: data.id, itemId: data.item_id, qty: data.qty, unit: data.unit };
+}
+async function deleteRecipeItemDB(id){
+  const { error } = await sb.from('recipe_items').delete().eq('id', id);
+  if(error){ setConnectionStatus(false, error); throw error; }
+  setConnectionStatus(true);
+}
+
+// ====== RECIPE COST HISTORY CRUD ======
+async function insertCostHistoryDB(recipeId, snapshot){
+  const { data, error } = await sb.from('recipe_cost_history').insert({
+    recipe_id: recipeId,
+    bahan: snapshot.bahan, labor: snapshot.labor, rent: snapshot.rent, utility: snapshot.utility,
+    total: snapshot.total, per_unit: snapshot.perUnit, sell_price: snapshot.sellPrice,
+    labor_pct: snapshot.laborPct, rent_pct: snapshot.rentPct, utility_pct: snapshot.utilPct
+  }).select().single();
+  if(error){ setConnectionStatus(false, error); throw error; }
+  setConnectionStatus(true);
+  return {
+    id: data.id, recipeId: data.recipe_id, date: data.saved_date,
+    snapshot: {
+      bahan: data.bahan, labor: data.labor, rent: data.rent, utility: data.utility,
+      total: data.total, perUnit: data.per_unit, sellPrice: data.sell_price,
+      laborPct: data.labor_pct, rentPct: data.rent_pct, utilPct: data.utility_pct
+    }
+  };
+}
+async function updateCostHistoryDB(id, snapshot){
+  const { error } = await sb.from('recipe_cost_history').update({
+    bahan: snapshot.bahan, total: snapshot.total, per_unit: snapshot.perUnit, sell_price: snapshot.sellPrice
+  }).eq('id', id);
+  if(error){ setConnectionStatus(false, error); throw error; }
+  setConnectionStatus(true);
+}
+async function deleteCostHistoryDB(id){
+  const { error } = await sb.from('recipe_cost_history').delete().eq('id', id);
+  if(error){ setConnectionStatus(false, error); throw error; }
+  setConnectionStatus(true);
+}
+
+// ====== KEDAI ENTRIES CRUD ======
+async function insertKedaiDB(entry){
+  const { data, error } = await sb.from('kedai_entries').insert({
+    kedai: entry.kedai, item_name: entry.itemName, weight: entry.weight, unit: entry.unit,
+    carton_qty: entry.cartonQty, price: entry.price, price_carton: entry.priceCarton
+  }).select().single();
+  if(error){ setConnectionStatus(false, error); throw error; }
+  setConnectionStatus(true);
+  return {
+    id: data.id, kedai: data.kedai, itemName: data.item_name, weight: data.weight,
+    unit: data.unit, cartonQty: data.carton_qty, price: data.price, priceCarton: data.price_carton
+  };
+}
+async function deleteKedaiDB(id){
+  const { error } = await sb.from('kedai_entries').delete().eq('id', id);
+  if(error){ setConnectionStatus(false, error); throw error; }
+  setConnectionStatus(true);
+}
+
+// ====== BACKUP (export/import as JSON, on top of Supabase) ======
+function exportData(){
+  const payload = { items, movements };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `stok-legasi-dapur-ibu-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importData(file){
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try{
+      const parsed = JSON.parse(e.target.result);
+      let importItems = [], importMovements = [];
+      if(Array.isArray(parsed)){
+        importItems = parsed;
+      }else if(parsed && Array.isArray(parsed.items)){
+        importItems = parsed.items;
+        importMovements = Array.isArray(parsed.movements) ? parsed.movements : [];
+      }else{
+        throw new Error('Format fail tidak sah');
+      }
+      // insert items into Supabase, remember old-id -> new-id mapping
+      const idMap = {};
+      for(const it of importItems){
+        const inserted = await insertItemDB(it);
+        idMap[it.id] = inserted.id;
+        items.push(inserted);
+      }
+      for(const m of importMovements){
+        const newItemId = idMap[m.itemId] || m.itemId;
+        const inserted = await insertMovementDB({ ...m, itemId: newItemId });
+        movements.push(inserted);
+      }
+      renderAll();
+      alert('Backup berjaya diimport (' + importItems.length + ' item).');
+    }catch(err){
+      alert('Gagal import fail: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function fmt(n){
+  const num = Number(n);
+  if(isNaN(num)) return '0';
+  return num % 1 === 0 ? num.toString() : num.toFixed(2);
+}
+function money(n){
+  const num = Number(n)||0;
+  return 'RM ' + num.toFixed(2);
+}
+
+function categoryItems(cat){
+  return items.filter(i => i.category === cat);
+}
+
+let editingId = { ingredient: null, packaging: null };
+
+function renderCategoryPanel(cat){
+  const container = document.getElementById('panel-' + cat);
+  const label = cat === 'ingredient' ? 'Ingredient' : 'Packaging';
+  const list = categoryItems(cat);
+  const editId = editingId[cat];
+  const editItem = editId ? list.find(i => i.id === editId) : null;
+
+  container.innerHTML = `
+    <div class="card">
+      <h2><span class="dot"></span>${editItem ? `Kemaskini ${label}` : `Tambah ${label}`}</h2>
+      <div class="field-row">
+        <div>
+          <label>Nama Item</label>
+          <input type="text" id="${cat}-name" placeholder="cth: Tepung Gandum" value="${editItem ? escapeHtml(editItem.name) : ''}">
+        </div>
+        <div class="unit-pair">
+          <div>
+            <label>Berat</label>
+            <input type="number" id="${cat}-weight" min="0" step="any" placeholder="0" value="${editItem ? editItem.weight : ''}">
+          </div>
+          <div>
+            <label>Unit</label>
+            <select id="${cat}-unit">
+              <option value="g" ${editItem && editItem.unit === 'g' ? 'selected' : ''}>gram</option>
+              <option value="kg" ${editItem && editItem.unit === 'kg' ? 'selected' : ''}>kg</option>
+              <option value="pcs" ${editItem && editItem.unit === 'pcs' ? 'selected' : ''}>pcs</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label>Harga / Unit (RM)</label>
+          <input type="number" id="${cat}-priceunit" min="0" step="0.01" placeholder="0.00" value="${editItem ? editItem.priceUnit : ''}">
+        </div>
+        <div>
+          <label>Kuantiti dalam Karton</label>
+          <input type="number" id="${cat}-cartonweight" min="0" step="any" placeholder="0" value="${editItem ? editItem.cartonWeight : ''}">
+        </div>
+        <div>
+          <label>Harga / Karton (RM)</label>
+          <input type="number" id="${cat}-pricecarton" min="0" step="0.01" placeholder="0.00" value="${editItem ? editItem.priceCarton : ''}">
+        </div>
+      </div>
+      <button class="primary" id="${cat}-add-btn">${editItem ? '💾 Kemaskini Item' : '+ Tambah Item'}</button>
+      ${editItem ? `<button class="primary" id="${cat}-cancel-btn" style="background:#fff;color:var(--plum-soft);border:1.5px solid var(--line);margin-top:8px;">Batal</button>` : ''}
+      <div class="save-msg" id="${cat}-msg"></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="dot"></span>Senarai ${label}</h2>
+      ${list.length === 0 ? `<div class="empty">Belum ada item ${label.toLowerCase()}. Tambah item di atas.</div>` : `
+      <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Nama</th><th>Berat</th><th>Harga/Unit</th><th>Kuantiti/Karton</th><th>Harga/Karton</th><th>Harga Unit (bila Karton)</th><th></th></tr>
+        </thead>
+        <tbody>
+          ${list.map(i => {
+            const unitPriceViaCarton = (i.cartonWeight > 0) ? (i.priceCarton / i.cartonWeight) : 0;
+            return `
+            <tr>
+              <td>${escapeHtml(i.name)}</td>
+              <td>${fmt(i.weight)} ${i.unit}</td>
+              <td class="price-num">${money(i.priceUnit)}</td>
+              <td>${fmt(i.cartonWeight)}</td>
+              <td class="price-num">${money(i.priceCarton)}</td>
+              <td class="price-num">${i.cartonWeight > 0 ? money(unitPriceViaCarton) : '—'}</td>
+              <td style="white-space:nowrap;">
+                <button class="rm-btn" data-id="${i.id}" data-cat="${cat}" data-action="edit" style="background:var(--ok-bg);color:var(--ok);margin-right:4px;">Edit</button>
+                <button class="rm-btn" data-id="${i.id}" data-cat="${cat}" data-action="remove">Buang</button>
+              </td>
+            </tr>
+          `;
+          }).join('')}
+        </tbody>
+      </table>
+      </div>
+      `}
+    </div>
+  `;
+
+  document.getElementById(`${cat}-add-btn`).addEventListener('click', () => addItem(cat));
+  const cancelBtn = document.getElementById(`${cat}-cancel-btn`);
+  if(cancelBtn) cancelBtn.addEventListener('click', () => { editingId[cat] = null; renderCategoryPanel(cat); });
+  container.querySelectorAll('.rm-btn').forEach(btn => {
+    if(btn.dataset.action === 'edit'){
+      btn.addEventListener('click', () => { editingId[cat] = btn.dataset.id; renderCategoryPanel(cat); });
+    }else{
+      btn.addEventListener('click', () => removeItem(btn.dataset.id));
+    }
+  });
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+async function addItem(cat){
+  const name = document.getElementById(`${cat}-name`).value.trim();
+  const weight = parseFloat(document.getElementById(`${cat}-weight`).value) || 0;
+  const unit = document.getElementById(`${cat}-unit`).value;
+  const priceUnit = parseFloat(document.getElementById(`${cat}-priceunit`).value) || 0;
+  const cartonWeight = parseFloat(document.getElementById(`${cat}-cartonweight`).value) || 0;
+  const priceCarton = parseFloat(document.getElementById(`${cat}-pricecarton`).value) || 0;
+  const msg = document.getElementById(`${cat}-msg`);
+
+  if(!name){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = 'Sila masukkan nama item.';
+    return;
+  }
+
+  const editId = editingId[cat];
+
+  try{
+    if(editId){
+      const updated = await updateItemDB(editId, { category: cat, name, weight, unit, priceUnit, cartonWeight, priceCarton });
+      const idx = items.findIndex(i => i.id === editId);
+      if(idx !== -1) items[idx] = updated;
+      editingId[cat] = null;
+      msg.style.color = 'var(--ok)';
+      msg.textContent = 'Item dikemaskini ✓';
+      renderAll();
+    }else{
+      const newItem = await insertItemDB({ category: cat, name, weight, unit, priceUnit, cartonWeight, priceCarton });
+      items.push(newItem);
+      msg.style.color = 'var(--ok)';
+      msg.textContent = 'Item disimpan ✓';
+      renderAll();
+    }
+  }catch(e){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = 'Gagal simpan: ' + (e.message || e.details || JSON.stringify(e));
+  }
+}
+
+async function removeItem(id){
+  try{
+    await deleteItemDB(id);
+    items = items.filter(i => i.id !== id);
+    renderAll();
+  }catch(e){
+    alert('Gagal buang item: ' + (e.message || JSON.stringify(e)));
+  }
+}
+
+function populateDropdowns(){
+  const inSel = document.getElementById('in-item');
+  const outSel = document.getElementById('out-item');
+  const opts = items.map(i => `<option value="${i.id}">${escapeHtml(i.name)} (${i.category === 'ingredient' ? 'Ingredient' : 'Packaging'})</option>`).join('');
+  const placeholder = items.length === 0 ? '<option value="">Tiada item — tambah dahulu</option>' : '<option value="">Pilih item...</option>' + opts;
+  inSel.innerHTML = placeholder;
+  outSel.innerHTML = placeholder;
+}
+
+function itemTotals(itemId){
+  let totalIn = 0, totalOut = 0;
+  let lastUnit = null, lastDate = null;
+  movements.forEach(m => {
+    if(m.itemId !== itemId) return;
+    if(m.type === 'in') totalIn += m.totalWeight;
+    else totalOut += m.totalWeight;
+    if(!lastDate || new Date(m.date) > new Date(lastDate)){
+      lastDate = m.date;
+      lastUnit = m.resultUnit;
+    }
+  });
+  return { totalIn, totalOut, baki: totalIn - totalOut, unit: lastUnit };
+}
+
+function renderMovementTable(){
+  const el = document.getElementById('movement-table');
+  if(items.length === 0){
+    el.innerHTML = `<div class="empty">Tiada item lagi. Tambah item di tab INGREDIENT / PACKAGING dahulu.</div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>Item</th><th>Jumlah Masuk</th><th>Jumlah Keluar</th><th>Baki</th><th>Status</th><th>Nilai</th></tr>
+      </thead>
+      <tbody>
+        ${items.map(i => {
+          const { totalIn, totalOut, baki, unit } = itemTotals(i.id);
+          const outOfStock = baki <= 0;
+          const displayUnit = unitLabel(unit || i.unit);
+          const value = Math.max(0, baki) * (i.priceUnit || 0);
+          return `
+            <tr>
+              <td>${escapeHtml(i.name)}</td>
+              <td>${fmt(totalIn)} ${displayUnit}</td>
+              <td>${fmt(totalOut)} ${displayUnit}</td>
+              <td class="stock-num">${fmt(baki)} ${displayUnit}</td>
+              <td><span class="badge ${outOfStock ? 'out' : 'ok'}">${outOfStock ? 'Out of Stock' : 'Ada Stok'}</span></td>
+              <td class="price-num">${money(value)}</td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    </table>
+    </div>
+  `;
+}
+
+function renderGrandTotal(){
+  const el = document.getElementById('grand-total-value');
+  if(!el) return;
+  if(items.length === 0){
+    el.innerHTML = `<div class="empty">Tiada item lagi.</div>`;
+    return;
+  }
+  let totalIngredient = 0;
+  let totalPackaging = 0;
+  items.forEach(i => {
+    const { baki } = itemTotals(i.id);
+    const value = Math.max(0, baki) * (i.priceUnit || 0);
+    if(i.category === 'ingredient') totalIngredient += value;
+    else totalPackaging += value;
+  });
+  const grandTotal = totalIngredient + totalPackaging;
+  el.innerHTML = `
+    <div class="summary-row"><span>Nilai Ingredient</span><span>${money(totalIngredient)}</span></div>
+    <div class="summary-row"><span>Nilai Packaging</span><span>${money(totalPackaging)}</span></div>
+    <div class="summary-row total"><span>Jumlah Nilai Inventori</span><span class="price-num">${money(grandTotal)}</span></div>
+  `;
+}
+
+function formatDate(iso){
+  try{
+    const d = new Date(iso);
+    return d.toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric' }) +
+      ' ' + d.toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit' });
+  }catch(e){
+    return '';
+  }
+}
+
+function renderHistory(type, containerId){
+  const container = document.getElementById(containerId);
+  const isIn = type === 'in';
+  const rows = movements
+    .filter(m => m.type === type)
+    .sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  if(rows.length === 0){
+    container.innerHTML = `<div class="history-wrap"><h3>${isIn ? 'Sejarah Stock In' : 'Sejarah Stock Out'}</h3><div class="empty">Belum ada rekod.</div></div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="history-wrap">
+      <h3>${isIn ? 'Sejarah Stock In' : 'Sejarah Stock Out'}</h3>
+      <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>${isIn ? 'Kuantiti Masuk' : 'Kuantiti Diambil'}</th>
+            <th>Jumlah</th>
+            <th>${isIn ? 'Tarikh Beli' : 'Tarikh Keluar'}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(m => {
+            const item = items.find(i => i.id === m.itemId);
+            const itemName = item ? item.name : '(item dibuang)';
+            const displayUnit = m.resultUnit || (item ? item.unit : '');
+            const qtyDisplay = m.unit === 'karton'
+              ? `${fmt(m.qty)} karton × ${fmt(m.weightPerUnit)} ${unitLabel(m.cartonSubUnit)}/karton`
+              : `${fmt(m.qty)} ${unitLabel(m.unit)}`;
+            return `
+              <tr>
+                <td>${escapeHtml(itemName)}</td>
+                <td>${qtyDisplay}</td>
+                <td class="stock-num">${fmt(m.totalWeight)} ${unitLabel(displayUnit)}</td>
+                <td>${formatDate(m.date)}</td>
+                <td><button class="del-btn" data-id="${m.id}" data-type="${type}">✕</button></td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+      </div>
+    </div>
+  `;
+
+  container.querySelectorAll('.del-btn').forEach(btn => {
+    btn.addEventListener('click', () => deleteMovement(btn.dataset.id));
+  });
+}
+
+async function deleteMovement(id){
+  try{
+    await deleteMovementDB(id);
+    movements = movements.filter(m => m.id !== id);
+    renderMovementTable();
+    renderHistory('in', 'in-history');
+    renderHistory('out', 'out-history');
+  }catch(e){
+    alert('Gagal buang rekod: ' + (e.message || JSON.stringify(e)));
+  }
+}
+
+async function stockIn(){
+  const id = document.getElementById('in-item').value;
+  const qty = parseFloat(document.getElementById('in-qty').value);
+  const unit = document.getElementById('in-unit').value;
+  const cartonWeight = parseFloat(document.getElementById('in-cartonweight').value);
+  const cartonSubUnit = document.getElementById('in-cartonsubunit').value;
+  const msg = document.getElementById('movement-msg');
+
+  if(!id || !qty || qty <= 0){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = 'Sila pilih item dan masukkan kuantiti yang sah.';
+    return;
+  }
+  if(unit === 'karton' && (!cartonWeight || cartonWeight <= 0)){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = 'Kuantiti dalam Karton belum ditetapkan untuk item ini. Sila isi di tab INGREDIENT / PACKAGING dahulu.';
+    return;
+  }
+
+  const item = items.find(i => i.id === id);
+  let totalWeight, resultUnit;
+  if(unit === 'karton'){
+    totalWeight = qty * cartonWeight;
+    resultUnit = cartonSubUnit;
+  }else{
+    totalWeight = qty;
+    resultUnit = unit;
+  }
+
+  try{
+    const newMovement = await insertMovementDB({
+      itemId: id, type: 'in',
+      qty, unit, weightPerUnit: unit === 'karton' ? cartonWeight : null,
+      cartonSubUnit: unit === 'karton' ? cartonSubUnit : null,
+      totalWeight, resultUnit
+    });
+    movements.push(newMovement);
+    document.getElementById('in-qty').value = '';
+    document.getElementById('in-cartonweight').value = '';
+    msg.style.color = 'var(--ok)';
+    msg.textContent = `Stock In berjaya: ${item.name} +${fmt(totalWeight)} ${unitLabel(resultUnit)}`;
+    renderMovementTable();
+    renderHistory('in', 'in-history');
+  }catch(e){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = 'Gagal simpan: ' + (e.message || e.details || JSON.stringify(e));
+  }
+}
+
+async function stockOut(){
+  const id = document.getElementById('out-item').value;
+  const qty = parseFloat(document.getElementById('out-qty').value);
+  const unit = document.getElementById('out-unit').value;
+  const cartonWeight = parseFloat(document.getElementById('out-cartonweight').value);
+  const cartonSubUnit = document.getElementById('out-cartonsubunit').value;
+  const msg = document.getElementById('movement-msg');
+
+  if(!id || !qty || qty <= 0){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = 'Sila pilih item dan masukkan kuantiti yang sah.';
+    return;
+  }
+  if(unit === 'karton' && (!cartonWeight || cartonWeight <= 0)){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = 'Kuantiti dalam Karton belum ditetapkan untuk item ini. Sila isi di tab INGREDIENT / PACKAGING dahulu.';
+    return;
+  }
+
+  const item = items.find(i => i.id === id);
+  let totalWeight, resultUnit;
+  if(unit === 'karton'){
+    totalWeight = qty * cartonWeight;
+    resultUnit = cartonSubUnit;
+  }else{
+    totalWeight = qty;
+    resultUnit = unit;
+  }
+
+  try{
+    const newMovement = await insertMovementDB({
+      itemId: id, type: 'out',
+      qty, unit, weightPerUnit: unit === 'karton' ? cartonWeight : null,
+      cartonSubUnit: unit === 'karton' ? cartonSubUnit : null,
+      totalWeight, resultUnit
+    });
+    movements.push(newMovement);
+    document.getElementById('out-qty').value = '';
+    document.getElementById('out-cartonweight').value = '';
+    msg.style.color = 'var(--ok)';
+    msg.textContent = `Stock Out direkod: ${item.name} −${fmt(totalWeight)} ${unitLabel(resultUnit)}`;
+    renderMovementTable();
+    renderHistory('out', 'out-history');
+  }catch(e){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = 'Gagal simpan: ' + (e.message || e.details || JSON.stringify(e));
+  }
+}
+
+// ====== KOS PRODUK (in-memory only, belum sambung Supabase) ======
+let recipes = [];
+let activeRecipeId = null;
+let recipeCostHistory = [];
+let editingHistoryId = null;
+
+function moneyPrecise(n){
+  const num = Number(n)||0;
+  if(num === 0) return 'RM 0.00';
+  if(num >= 1) return 'RM ' + num.toFixed(2);
+  return 'RM ' + num.toFixed(4);
+}
+
+function renderRecipeChips(){
+  const el = document.getElementById('recipe-chips');
+  if(!el) return;
+  if(recipes.length === 0){
+    el.innerHTML = '<div class="empty">Belum ada resepi. Cipta satu di bawah.</div>';
+    return;
+  }
+  el.innerHTML = recipes.map(r => `
+    <span class="badge ${r.id === activeRecipeId ? 'ok' : ''}" style="cursor:pointer;margin:0 6px 6px 0;padding:6px 12px;" data-id="${r.id}">${escapeHtml(r.name)}</span>
+  `).join('');
+  el.querySelectorAll('[data-id]').forEach(chip => {
+    chip.addEventListener('click', () => {
+      activeRecipeId = chip.dataset.id;
+      renderRecipeChips();
+      renderRecipeDetail();
+    });
+  });
+}
+
+function populateRecipeItemSelect(){
+  const sel = document.getElementById('item-select');
+  if(!sel) return;
+  if(items.length === 0){
+    sel.innerHTML = '<option value="">Tiada bahan — tambah di Ingredient/Packaging dahulu</option>';
+    return;
+  }
+  sel.innerHTML = '<option value="">Pilih bahan...</option>' +
+    items.map(i => {
+      const pricePerUnit = i.weight > 0 ? i.priceUnit / i.weight : 0;
+      const cat = i.category === 'ingredient' ? 'Ingredient' : 'Packaging';
+      return `<option value="${i.id}">${escapeHtml(i.name)} — ${cat} (${moneyPrecise(pricePerUnit)}/${i.unit})</option>`;
+    }).join('');
+}
+
+function calcRecipeCost(recipe){
+  let bahan = 0;
+  recipe.items.forEach(it => {
+    const ing = items.find(i => i.id === it.itemId);
+    if(ing && ing.weight > 0){
+      const pricePerUnit = ing.priceUnit / ing.weight;
+      const qtyInBaseUnit = convertWeight(it.qty, it.unit, ing.unit);
+      bahan += pricePerUnit * qtyInBaseUnit;
+    }
+  });
+  const laborPct = parseFloat(document.getElementById('pct-labor').value) || 0;
+  const rentPct = parseFloat(document.getElementById('pct-rent').value) || 0;
+  const utilPct = parseFloat(document.getElementById('pct-utility').value) || 0;
+  const labor = bahan * (laborPct/100);
+  const rent = bahan * (rentPct/100);
+  const utility = bahan * (utilPct/100);
+  const total = bahan + labor + rent + utility;
+  const yieldQty = recipe.yieldQty > 0 ? recipe.yieldQty : 1;
+  const perUnit = total / yieldQty;
+  return { bahan, labor, rent, utility, total, perUnit, laborPct, rentPct, utilPct };
+}
+
+function renderRecipeDetail(){
+  const card = document.getElementById('recipe-detail-card');
+  if(!card) return;
+  const recipe = recipes.find(r => r.id === activeRecipeId);
+  if(!recipe){ card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  document.getElementById('recipe-title').innerHTML = `<span class="dot"></span>${escapeHtml(recipe.name)} (hasil: ${recipe.yieldQty} ${recipe.yieldUnit || 'pcs'})`;
+
+  const body = document.getElementById('recipe-items-body');
+  const emptyMsg = document.getElementById('recipe-items-empty');
+  if(recipe.items.length === 0){
+    body.innerHTML = '';
+    emptyMsg.style.display = 'block';
+  }else{
+    emptyMsg.style.display = 'none';
+    body.innerHTML = recipe.items.map(it => {
+      const ing = items.find(i => i.id === it.itemId);
+      const name = ing ? ing.name : '(bahan dibuang)';
+      const pricePerUnit = (ing && ing.weight > 0) ? ing.priceUnit / ing.weight : 0;
+      const qtyInBaseUnit = ing ? convertWeight(it.qty, it.unit, ing.unit) : it.qty;
+      const cost = pricePerUnit * qtyInBaseUnit;
+      return `
+        <tr>
+          <td>${escapeHtml(name)}</td>
+          <td>${fmt(it.qty)} ${it.unit}</td>
+          <td class="price-num">${money(cost)}</td>
+          <td><button class="del-btn" data-itemid="${it.id}">✕</button></td>
+        </tr>
+      `;
+    }).join('');
+    body.querySelectorAll('.del-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        try{
+          await deleteRecipeItemDB(btn.dataset.itemid);
+          recipe.items = recipe.items.filter(it => it.id !== btn.dataset.itemid);
+          renderRecipeDetail();
+        }catch(e){
+          alert('Gagal buang bahan: ' + (e.message || JSON.stringify(e)));
+        }
+      });
+    });
+  }
+
+  const c = calcRecipeCost(recipe);
+  document.getElementById('sum-bahan').textContent = money(c.bahan);
+  document.getElementById('lbl-labor').textContent = `+ Pekerja (${c.laborPct}%)`;
+  document.getElementById('lbl-rent').textContent = `+ Sewa (${c.rentPct}%)`;
+  document.getElementById('lbl-utility').textContent = `+ Utiliti (${c.utilPct}%)`;
+  document.getElementById('sum-labor').textContent = money(c.labor);
+  document.getElementById('sum-rent').textContent = money(c.rent);
+  document.getElementById('sum-utility').textContent = money(c.utility);
+  document.getElementById('sum-total').textContent = money(c.total);
+  document.getElementById('sum-perunit').textContent = money(c.perUnit);
+
+  const mult = parseFloat(document.getElementById('markup-mult').value) || 1;
+  const sellPrice = c.perUnit * mult;
+  const profit = sellPrice - c.perUnit;
+  document.getElementById('sum-sellprice').textContent = money(sellPrice);
+  document.getElementById('sum-profit').textContent = money(profit);
+
+  renderRecipeCostHistory();
+}
+
+function renderRecipeCostHistory(){
+  const el = document.getElementById('recipe-cost-history');
+  if(!el) return;
+  const recipe = recipes.find(r => r.id === activeRecipeId);
+  if(!recipe) return;
+  const historyForRecipe = recipeCostHistory
+    .filter(h => h.recipeId === recipe.id)
+    .sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  if(historyForRecipe.length === 0){
+    el.innerHTML = '<div class="empty">Belum ada rekod tersimpan untuk resepi ni.</div>';
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="table-scroll">
+    <table>
+      <thead><tr><th>Tarikh Simpan</th><th>Kos Bahan</th><th>Jumlah Kos</th><th>Kos/Unit</th><th>Harga Jualan</th><th></th></tr></thead>
+      <tbody>
+        ${historyForRecipe.map(h => {
+          if(h.id === editingHistoryId){
+            return `
+              <tr>
+                <td>${formatDate(h.date)}</td>
+                <td><input type="number" step="0.01" id="edit-bahan-${h.id}" value="${h.snapshot.bahan}" style="width:80px;margin:0;"></td>
+                <td><input type="number" step="0.01" id="edit-total-${h.id}" value="${h.snapshot.total}" style="width:80px;margin:0;"></td>
+                <td><input type="number" step="0.01" id="edit-perunit-${h.id}" value="${h.snapshot.perUnit}" style="width:80px;margin:0;"></td>
+                <td><input type="number" step="0.01" id="edit-sellprice-${h.id}" value="${h.snapshot.sellPrice}" style="width:80px;margin:0;"></td>
+                <td style="white-space:nowrap;">
+                  <button class="rm-btn save-hist-btn" data-histid="${h.id}" style="background:var(--ok-bg);color:var(--ok);margin-right:4px;">Simpan</button>
+                  <button class="rm-btn cancel-hist-btn" data-histid="${h.id}">Batal</button>
+                </td>
+              </tr>
+            `;
+          }
+          return `
+          <tr>
+            <td>${formatDate(h.date)}</td>
+            <td>${money(h.snapshot.bahan)}</td>
+            <td>${money(h.snapshot.total)}</td>
+            <td class="price-num">${money(h.snapshot.perUnit)}</td>
+            <td class="price-num">${money(h.snapshot.sellPrice)}</td>
+            <td style="white-space:nowrap;">
+              <button class="rm-btn edit-hist-btn" data-histid="${h.id}" style="background:var(--ok-bg);color:var(--ok);margin-right:4px;">Edit</button>
+              <button class="del-btn" data-histid="${h.id}">✕</button>
+            </td>
+          </tr>
+        `;
+        }).join('')}
+      </tbody>
+    </table>
+    </div>
+  `;
+  el.querySelectorAll('.edit-hist-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      editingHistoryId = btn.dataset.histid;
+      renderRecipeCostHistory();
+    });
+  });
+  el.querySelectorAll('.cancel-hist-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      editingHistoryId = null;
+      renderRecipeCostHistory();
+    });
+  });
+  el.querySelectorAll('.save-hist-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const histId = btn.dataset.histid;
+      const h = recipeCostHistory.find(x => x.id === histId);
+      if(h){
+        h.snapshot.bahan = parseFloat(document.getElementById(`edit-bahan-${histId}`).value) || 0;
+        h.snapshot.total = parseFloat(document.getElementById(`edit-total-${histId}`).value) || 0;
+        h.snapshot.perUnit = parseFloat(document.getElementById(`edit-perunit-${histId}`).value) || 0;
+        h.snapshot.sellPrice = parseFloat(document.getElementById(`edit-sellprice-${histId}`).value) || 0;
+        try{
+          await updateCostHistoryDB(histId, h.snapshot);
+        }catch(e){
+          alert('Gagal kemaskini: ' + (e.message || JSON.stringify(e)));
+        }
+      }
+      editingHistoryId = null;
+      renderRecipeCostHistory();
+    });
+  });
+  el.querySelectorAll('.del-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try{
+        await deleteCostHistoryDB(btn.dataset.histid);
+        recipeCostHistory = recipeCostHistory.filter(h => h.id !== btn.dataset.histid);
+        renderRecipeCostHistory();
+      }catch(e){
+        alert('Gagal buang rekod: ' + (e.message || JSON.stringify(e)));
+      }
+    });
+  });
+}
+
+document.getElementById('btn-save-cost-history').addEventListener('click', async () => {
+  const recipe = recipes.find(r => r.id === activeRecipeId);
+  if(!recipe) return;
+  const msg = document.getElementById('cost-history-msg');
+  if(recipe.items.length === 0){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = 'Tambah sekurang-kurangnya satu bahan dahulu.';
+    return;
+  }
+  const c = calcRecipeCost(recipe);
+  const mult = parseFloat(document.getElementById('markup-mult').value) || 1;
+  const sellPrice = c.perUnit * mult;
+  const snapshot = {
+    bahan: c.bahan, labor: c.labor, rent: c.rent, utility: c.utility,
+    total: c.total, perUnit: c.perUnit, sellPrice,
+    laborPct: c.laborPct, rentPct: c.rentPct, utilPct: c.utilPct
+  };
+  try{
+    const newHist = await insertCostHistoryDB(recipe.id, snapshot);
+    recipeCostHistory.push(newHist);
+    msg.style.color = 'var(--ok)';
+    msg.textContent = 'Rekod kos disimpan ✓';
+    renderRecipeCostHistory();
+  }catch(e){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = 'Gagal simpan: ' + (e.message || JSON.stringify(e));
+  }
+});
+
+function printRecipe(){
+  const recipe = recipes.find(r => r.id === activeRecipeId);
+  if(!recipe) return alert('Sila pilih resepi dahulu.');
+  const c = calcRecipeCost(recipe);
+  const mult = parseFloat(document.getElementById('markup-mult').value) || 1;
+  const sellPrice = c.perUnit * mult;
+
+  const itemRows = recipe.items.map(it => {
+    const ing = items.find(i => i.id === it.itemId);
+    const name = ing ? ing.name : '(bahan dibuang)';
+    const pricePerUnit = (ing && ing.weight > 0) ? ing.priceUnit / ing.weight : 0;
+    const qtyInBaseUnit = ing ? convertWeight(it.qty, it.unit, ing.unit) : it.qty;
+    const cost = pricePerUnit * qtyInBaseUnit;
+    return `<tr><td>${escapeHtml(name)}</td><td>${fmt(it.qty)} ${it.unit}</td><td style="text-align:right;">${money(cost)}</td></tr>`;
+  }).join('');
+
+  const html = `
+    <!DOCTYPE html><html lang="ms"><head><meta charset="UTF-8">
+    <title>Kos Produk - ${escapeHtml(recipe.name)}</title>
+    <style>
+      body{ font-family: Arial, sans-serif; padding: 30px; color:#3c2a3a; }
+      h1{ font-size:1.3rem; margin-bottom:2px; }
+      h2{ font-size:0.95rem; color:#5b3358; margin-top:24px; }
+      table{ width:100%; border-collapse:collapse; margin-top:8px; font-size:0.85rem; }
+      th, td{ padding:6px 8px; border-bottom:1px solid #ddd; text-align:left; }
+      .total-row td{ font-weight:bold; border-top:2px solid #333; }
+      .meta{ color:#888; font-size:0.8rem; margin-bottom:16px; }
+    </style>
+    </head><body>
+      <h1>Legasi Dapur Ibu — Kos Produk</h1>
+      <div class="meta">Dicetak: ${new Date().toLocaleDateString('ms-MY')} ${new Date().toLocaleTimeString('ms-MY')}</div>
+      <h2>${escapeHtml(recipe.name)} (Hasil: ${recipe.yieldQty} ${recipe.yieldUnit || 'pcs'})</h2>
+      <table>
+        <thead><tr><th>Bahan</th><th>Kuantiti</th><th style="text-align:right;">Kos</th></tr></thead>
+        <tbody>${itemRows}</tbody>
+      </table>
+      <h2>Ringkasan Kos</h2>
+      <table>
+        <tr><td>Jumlah Kos Bahan</td><td style="text-align:right;">${money(c.bahan)}</td></tr>
+        <tr><td>+ Pekerja (${c.laborPct}%)</td><td style="text-align:right;">${money(c.labor)}</td></tr>
+        <tr><td>+ Sewa (${c.rentPct}%)</td><td style="text-align:right;">${money(c.rent)}</td></tr>
+        <tr><td>+ Utiliti (${c.utilPct}%)</td><td style="text-align:right;">${money(c.utility)}</td></tr>
+        <tr class="total-row"><td>Jumlah Kos Produk</td><td style="text-align:right;">${money(c.total)}</td></tr>
+        <tr class="total-row"><td>Kos Per Unit</td><td style="text-align:right;">${money(c.perUnit)}</td></tr>
+        <tr class="total-row"><td>Cadangan Harga Jualan (${mult}×)</td><td style="text-align:right;">${money(sellPrice)}</td></tr>
+      </table>
+    </body></html>
+  `;
+
+  const printWindow = window.open('', '_blank');
+  printWindow.document.write(html);
+  printWindow.document.close();
+  printWindow.onload = () => { printWindow.print(); };
+}
+
+document.getElementById('btn-print-recipe').addEventListener('click', printRecipe);
+
+document.getElementById('btn-add-recipe').addEventListener('click', async () => {
+  const name = document.getElementById('recipe-name').value.trim();
+  const yieldQty = parseFloat(document.getElementById('recipe-yield').value) || 1;
+  const yieldUnit = document.getElementById('recipe-yield-unit').value;
+  if(!name) return alert('Sila masukkan nama resepi.');
+  try{
+    const r = await insertRecipeDB({ name, yieldQty, yieldUnit });
+    recipes.push(r);
+    activeRecipeId = r.id;
+    document.getElementById('recipe-name').value = '';
+    document.getElementById('recipe-yield').value = '';
+    renderRecipeChips();
+    renderRecipeDetail();
+  }catch(e){
+    alert('Gagal cipta resepi: ' + (e.message || JSON.stringify(e)));
+  }
+});
+
+document.getElementById('btn-add-item').addEventListener('click', async () => {
+  const recipe = recipes.find(r => r.id === activeRecipeId);
+  if(!recipe) return;
+  const itemId = document.getElementById('item-select').value;
+  const qty = parseFloat(document.getElementById('item-qty').value);
+  const unit = document.getElementById('item-qty-unit').value;
+  if(!itemId || !qty || qty <= 0) return alert('Sila pilih bahan dan kuantiti yang sah.');
+  try{
+    const newItem = await insertRecipeItemDB(recipe.id, itemId, qty, unit);
+    recipe.items.push(newItem);
+    document.getElementById('item-qty').value = '';
+    renderRecipeDetail();
+  }catch(e){
+    alert('Gagal tambah bahan: ' + (e.message || JSON.stringify(e)));
+  }
+});
+
+document.getElementById('item-select').addEventListener('change', (e) => {
+  const ing = items.find(i => i.id === e.target.value);
+  if(ing) document.getElementById('item-qty-unit').value = ing.unit === 'pcs' ? 'pcs' : ing.unit;
+});
+
+['pct-labor','pct-rent','pct-utility','markup-mult'].forEach(id => {
+  document.getElementById(id).addEventListener('input', renderRecipeDetail);
+});
+
+// ====== PERBANDINGAN KEDAI (in-memory only, belum sambung Supabase) ======
+let kedaiEntries = [];
+
+function renderKedaiList(){
+  const el = document.getElementById('kedai-list');
+  if(!el) return;
+  if(kedaiEntries.length === 0){
+    el.innerHTML = '<div class="empty">Belum ada rekod. Tambah di atas.</div>';
+    return;
+  }
+  const shops = [...new Set(kedaiEntries.map(e => e.kedai))];
+  el.innerHTML = shops.map(shopName => {
+    const shopItems = kedaiEntries.filter(e => e.kedai === shopName);
+    return `
+      <div style="margin-bottom:16px;">
+        <h3 style="font-size:0.78rem;color:var(--plum);margin:0 0 8px;">🏪 ${escapeHtml(shopName)}</h3>
+        <div class="table-scroll">
+        <table>
+          <thead><tr><th>Bahan</th><th>Berat</th><th>Kuantiti/Karton</th><th>Harga Unit</th><th>Harga Karton</th><th>Harga Unit (bila Karton)</th><th></th></tr></thead>
+          <tbody>
+            ${shopItems.map(e => {
+              const cartonUnitPrice = (e.cartonQty > 0 && e.priceCarton > 0) ? e.priceCarton / e.cartonQty : 0;
+              return `
+              <tr>
+                <td>${escapeHtml(e.itemName)}</td>
+                <td>${fmt(e.weight)} ${e.unit}</td>
+                <td>${fmt(e.cartonQty)}</td>
+                <td class="price-num">${money(e.price)}</td>
+                <td class="price-num">${e.priceCarton > 0 ? money(e.priceCarton) : '—'}</td>
+                <td class="price-num">${cartonUnitPrice > 0 ? money(cartonUnitPrice) : '—'}</td>
+                <td><button class="del-btn" data-id="${e.id}">✕</button></td>
+              </tr>
+            `;
+            }).join('')}
+          </tbody>
+        </table>
+        </div>
+      </div>
+    `;
+  }).join('');
+  el.querySelectorAll('.del-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try{
+        await deleteKedaiDB(btn.dataset.id);
+        kedaiEntries = kedaiEntries.filter(e => e.id !== btn.dataset.id);
+        renderKedaiList();
+        renderKedaiComparison();
+      }catch(e){
+        alert('Gagal buang rekod: ' + (e.message || JSON.stringify(e)));
+      }
+    });
+  });
+}
+
+function renderKedaiComparison(){
+  const el = document.getElementById('kedai-comparison');
+  if(!el) return;
+  if(kedaiEntries.length === 0){
+    el.innerHTML = '<div class="empty">Belum ada data untuk dibandingkan.</div>';
+    return;
+  }
+  const itemNames = [...new Set(kedaiEntries.map(e => e.itemName.trim().toLowerCase()))];
+  el.innerHTML = itemNames.map(nameKey => {
+    const matches = kedaiEntries.filter(e => e.itemName.trim().toLowerCase() === nameKey);
+    const displayName = matches[0].itemName;
+    const withPrices = matches.map(e => {
+      const pricePerUnit = e.weight > 0 ? e.price / e.weight : 0;
+      const cartonUnitPrice = (e.cartonQty > 0 && e.priceCarton > 0) ? e.priceCarton / e.cartonQty : 0;
+      const bestPrice = cartonUnitPrice > 0 ? Math.min(pricePerUnit, cartonUnitPrice) : pricePerUnit;
+      return { ...e, pricePerUnit, cartonUnitPrice, bestPrice };
+    }).sort((a,b) => a.bestPrice - b.bestPrice);
+    return `
+      <div style="margin-bottom:14px;">
+        <h3 style="font-size:0.78rem;color:var(--plum);margin:0 0 8px;">${escapeHtml(displayName)}</h3>
+        <div class="table-scroll">
+        <table>
+          <thead><tr><th>Kedai</th><th>Berat</th><th>Harga/Unit Sebenar</th><th>Harga/Unit (Karton)</th></tr></thead>
+          <tbody>
+            ${withPrices.map((e, idx) => `
+              <tr style="${idx === 0 ? 'background:var(--ok-bg);' : ''}">
+                <td>${escapeHtml(e.kedai)} ${idx === 0 ? '✅' : ''}</td>
+                <td>${fmt(e.weight)} ${e.unit}</td>
+                <td class="price-num">${moneyPrecise(e.pricePerUnit)}/${e.unit}</td>
+                <td class="price-num">${e.cartonUnitPrice > 0 ? moneyPrecise(e.cartonUnitPrice) + '/' + e.unit : '—'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+document.getElementById('btn-add-kedai').addEventListener('click', async () => {
+  const kedai = document.getElementById('kedai-name').value.trim();
+  const itemName = document.getElementById('kedai-item-name').value.trim();
+  const weight = parseFloat(document.getElementById('kedai-weight').value) || 0;
+  const unit = document.getElementById('kedai-unit').value;
+  const cartonQty = parseFloat(document.getElementById('kedai-cartonqty').value) || 0;
+  const price = parseFloat(document.getElementById('kedai-price').value) || 0;
+  const priceCarton = parseFloat(document.getElementById('kedai-priceCarton').value) || 0;
+  const msg = document.getElementById('kedai-msg');
+  if(!kedai || !itemName){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = 'Sila masukkan nama kedai dan nama bahan.';
+    return;
+  }
+  if(weight <= 0){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = 'Sila masukkan berat yang sah.';
+    return;
+  }
+  try{
+    const newEntry = await insertKedaiDB({ kedai, itemName, weight, unit, cartonQty, price, priceCarton });
+    kedaiEntries.push(newEntry);
+    document.getElementById('kedai-name').value = '';
+    document.getElementById('kedai-item-name').value = '';
+    document.getElementById('kedai-weight').value = '';
+    document.getElementById('kedai-cartonqty').value = '';
+    document.getElementById('kedai-price').value = '';
+    document.getElementById('kedai-priceCarton').value = '';
+    document.getElementById('kedai-priceCartonUnit').value = '';
+    msg.style.color = 'var(--ok)';
+    msg.textContent = 'Rekod disimpan ✓';
+    renderKedaiList();
+    renderKedaiComparison();
+  }catch(e){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = 'Gagal simpan: ' + (e.message || JSON.stringify(e));
+  }
+});
+
+function updateKedaiCartonUnitPreview(){
+  const cartonQty = parseFloat(document.getElementById('kedai-cartonqty').value) || 0;
+  const priceCarton = parseFloat(document.getElementById('kedai-priceCarton').value) || 0;
+  const field = document.getElementById('kedai-priceCartonUnit');
+  if(cartonQty > 0 && priceCarton > 0){
+    field.value = money(priceCarton / cartonQty);
+  }else{
+    field.value = '';
+  }
+}
+['kedai-cartonqty','kedai-priceCarton'].forEach(id => {
+  document.getElementById(id).addEventListener('input', updateKedaiCartonUnitPreview);
+});
+
+function renderAll(){
+  if(!loaded) return;
+  renderCategoryPanel('ingredient');
+  renderCategoryPanel('packaging');
+  populateDropdowns();
+  renderMovementTable();
+  renderGrandTotal();
+  renderHistory('in', 'in-history');
+  renderHistory('out', 'out-history');
+  populateRecipeItemSelect();
+  renderRecipeChips();
+  renderRecipeDetail();
+  renderKedaiList();
+  renderKedaiComparison();
+}
+
+// Tabs
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+document.getElementById('btn-stock-in').addEventListener('click', stockIn);
+document.getElementById('btn-stock-out').addEventListener('click', stockOut);
+
+function toggleCartonField(prefix){
+  const unit = document.getElementById(`${prefix}-unit`).value;
+  const wrap = document.getElementById(`${prefix}-cartonweight-wrap`);
+  wrap.style.display = unit === 'karton' ? 'block' : 'none';
+}
+
+function prefillCartonWeight(prefix){
+  const itemId = document.getElementById(`${prefix}-item`).value;
+  const item = items.find(i => i.id === itemId);
+  const field = document.getElementById(`${prefix}-cartonweight`);
+  const hint = document.getElementById(`${prefix}-cartonweight-hint`);
+  if(item && item.cartonWeight){
+    field.value = item.cartonWeight;
+    hint.textContent = '';
+  }else if(item){
+    field.value = '';
+    hint.textContent = `⚠️ "Kuantiti dalam Karton" belum ditetapkan untuk ${item.name}. Sila isi di tab ${item.category === 'ingredient' ? 'INGREDIENT' : 'PACKAGING'} dahulu.`;
+    hint.style.color = 'var(--danger)';
+  }else{
+    field.value = '';
+    hint.textContent = '';
+  }
+}
+
+['in','out'].forEach(prefix => {
+  document.getElementById(`${prefix}-item`).addEventListener('change', () => prefillCartonWeight(prefix));
+  document.getElementById(`${prefix}-unit`).addEventListener('change', () => {
+    toggleCartonField(prefix);
+    prefillCartonWeight(prefix);
+  });
+  toggleCartonField(prefix);
+});
+
+document.getElementById('btn-export').addEventListener('click', exportData);
+document.getElementById('file-import').addEventListener('change', (e) => {
+  if(e.target.files && e.target.files[0]){
+    importData(e.target.files[0]);
+    e.target.value = '';
+  }
+});
+
+loadItems();
+</script>
+
+</body>
+</html>
