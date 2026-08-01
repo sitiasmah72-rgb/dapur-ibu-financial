@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sistem Gaji – Legasi Dapur Ibu</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'Segoe UI', sans-serif; background: #f5f5f5; color: #222; font-size: 14px; }
@@ -299,6 +300,7 @@ table.summary td:last-child { text-align: right; }
     <button class="tab-btn active" onclick="tukarTab('input',this)">📝 Input Waktu</button>
     <button class="tab-btn" onclick="tukarTab('ringkasan',this)">📊 Ringkasan</button>
     <button class="tab-btn" onclick="tukarTab('slip',this)">🖨️ Slip Gaji</button>
+    <button class="tab-btn" onclick="tukarTab('sejarah',this)">🗂️ Sejarah</button>
   </div>
 
   <!-- PANE: INPUT WAKTU -->
@@ -362,6 +364,10 @@ table.summary td:last-child { text-align: right; }
       <button class="print-btn" onclick="doPrint()">🖨️ Print / Simpan PDF</button>
       <span style="font-size:12px;color:#888">Atau tekan <b>Ctrl+P</b> selepas klik butang ini</span>
     </div>
+    <div style="margin-bottom:14px;">
+      <button onclick="hantarKeRekodGaji()" style="background:#27ae60;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;">🚀 Hantar Jumlah Bersih ke Gaji (Ringkas)</button>
+      <div style="font-size:11px;color:#888;margin-top:6px;">Ini akan buka borang "Tambah Gaji" di apps kewangan, dengan nama &amp; jumlah dah terisi automatik.</div>
+    </div>
     <div class="slip" id="slipArea">
       <!-- HEADER -->
       <div style="border-bottom:3px solid #222;padding:16px 22px;display:flex;justify-content:space-between;align-items:center;">
@@ -423,13 +429,36 @@ table.summary td:last-child { text-align: right; }
     </div>
   </div>
 
+  <!-- PANE: SEJARAH -->
+  <div id="pane-sejarah" class="pane">
+    <div style="font-size:12px;color:#888;margin-bottom:14px;">📌 Setiap kali Ibu tekan "💾 Simpan Data" (tab Input Waktu), rekod akan tersimpan di sini ikut nama pekerja &amp; bulan — untuk rujukan akan datang.</div>
+    <div id="sejarahList"></div>
+  </div>
+
 </div>
+
+<iframe id="printFrame" style="display:none;border:none;"></iframe>
 
 <script>
 const BNAM = ["Januari","Februari","Mac","April","Mei","Jun","Julai","Ogos","September","Oktober","November","Disember"];
 const HNAM = ["Ahad","Isnin","Selasa","Rabu","Khamis","Jumaat","Sabtu"];
 let modKira = "pokok";
 let D = {}; // waktu data
+
+// ── SAMBUNGAN SUPABASE (guna sesi yang sama dengan apps kewangan, sebab satu laman web) ──
+const SUPABASE_URL = 'https://zqvqlqndsqnybhrcniso.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_bkgAZuE3-0FQhjBVSuOBRg_524BbXG8';
+let supaGaji = null;
+let supaUserId = null;
+try {
+  supaGaji = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  supaGaji.auth.getSession().then(({ data }) => {
+    if (data && data.session) {
+      supaUserId = data.session.user.id;
+      renderSejarah(); // muat semula dari cloud sebaik dapat sesi
+    }
+  });
+} catch(e) { console.warn('Tidak dapat sambung Supabase dalam kalkulator gaji:', e); }
 
 // ── INIT ─────────────────────────────────────────────────────────
 window.onload = function() {
@@ -894,14 +923,147 @@ function simpanData() {
   try {
     const data = kumpulData();
     localStorage.setItem("gajiLDI", JSON.stringify(data));
+    simpanKeSejarah(data);
     const n = document.getElementById("simpanNote");
-    n.textContent = "✅ Data berjaya disimpan pada " + data.tarikhSimpan;
+    n.textContent = "✅ Data berjaya disimpan pada " + data.tarikhSimpan + " (turut tersimpan dalam Sejarah)";
     n.style.color = "#27ae60";
   } catch(e) {
     // localStorage mungkin tak tersedia — guna export sahaja
     eksportData();
   }
 }
+
+function simpanKeSejarah(data) {
+  kira(); // pastikan slipBersih terkini sebelum ambil nilai
+  const jumlahBersihText = document.getElementById("slipBersih").textContent || "RM 0.00";
+  const jumlahBersih = parseFloat(jumlahBersihText.replace(/[^\d.]/g, "")) || 0;
+
+  let sejarah = [];
+  try { sejarah = JSON.parse(localStorage.getItem("gajiLDI_sejarah") || "[]"); } catch(e) { sejarah = []; }
+
+  const nama = (data.nama || "Tanpa Nama").trim();
+  const bulanNama = BNAM[parseInt(data.bulan)] || "-";
+  const tahun = parseInt(data.tahun) || new Date().getFullYear();
+  const bulan = parseInt(data.bulan) || 0;
+
+  const key = nama.toLowerCase() + "|" + bulan + "|" + tahun;
+  const idx = sejarah.findIndex(s => s.key === key);
+  const entry = { key, nama, bulanNama, bulan, tahun, jumlahBersih, tarikhSimpan: data.tarikhSimpan, snapshot: data };
+  if (idx > -1) sejarah[idx] = entry; else sejarah.push(entry);
+  localStorage.setItem("gajiLDI_sejarah", JSON.stringify(sejarah));
+  renderSejarah();
+
+  // ---- Simpan kekal ke Supabase (cloud) ----
+  if (supaGaji && supaUserId) {
+    supaGaji.from('payslip_history')
+      .upsert({ user_id: supaUserId, nama, bulan, tahun, jumlah_bersih: jumlahBersih, snapshot: data }, { onConflict: 'user_id,nama,bulan,tahun' })
+      .then(({ error }) => {
+        const n = document.getElementById("simpanNote");
+        if (error) { n.textContent = "⚠️ Disimpan di peranti ini sahaja (gagal simpan ke cloud): " + error.message; n.style.color = "#c8920a"; }
+        else { n.textContent = "✅ Disimpan kekal ke cloud pada " + data.tarikhSimpan; n.style.color = "#27ae60"; }
+      });
+  } else {
+    const n = document.getElementById("simpanNote");
+    n.textContent = "⚠️ Disimpan di peranti ini sahaja — belum sambung cloud (cuba refresh apps).";
+    n.style.color = "#c8920a";
+  }
+}
+
+function renderSejarah() {
+  const el = document.getElementById("sejarahList");
+  if (!el) return;
+
+  if (supaGaji && supaUserId) {
+    el.innerHTML = '<div style="text-align:center;padding:20px;color:#999;font-size:13px;">Memuat dari cloud...</div>';
+    supaGaji.from('payslip_history').select('*').eq('user_id', supaUserId)
+      .order('tahun', { ascending: false }).order('bulan', { ascending: false })
+      .then(({ data, error }) => {
+        if (error || !data) { renderSejarahLocal(); return; }
+        const sejarah = data.map(r => ({
+          key: r.nama.toLowerCase() + "|" + r.bulan + "|" + r.tahun,
+          nama: r.nama, bulanNama: BNAM[r.bulan] || "-", bulan: r.bulan, tahun: r.tahun,
+          jumlahBersih: Number(r.jumlah_bersih), tarikhSimpan: r.updated_at, snapshot: r.snapshot,
+        }));
+        localStorage.setItem("gajiLDI_sejarah", JSON.stringify(sejarah)); // cache sandaran
+        paparSejarahList(sejarah);
+      });
+  } else {
+    renderSejarahLocal();
+  }
+}
+
+function renderSejarahLocal() {
+  let sejarah = [];
+  try { sejarah = JSON.parse(localStorage.getItem("gajiLDI_sejarah") || "[]"); } catch(e) { sejarah = []; }
+  sejarah.sort((a,b) => (b.tahun - a.tahun) || (b.bulan - a.bulan));
+  paparSejarahList(sejarah);
+}
+
+function paparSejarahList(sejarah) {
+  const el = document.getElementById("sejarahList");
+  if (!el) return;
+  if (sejarah.length === 0) {
+    el.innerHTML = '<div style="text-align:center;padding:24px;color:#999;font-size:13px;">Tiada sejarah lagi. Isi maklumat pekerja dan tekan "💾 Simpan Data" di tab Input Waktu.</div>';
+    return;
+  }
+  el.innerHTML = sejarah.map((s) => `
+    <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div>
+        <div style="font-weight:700;font-size:14px;color:#222;">${s.nama}</div>
+        <div style="font-size:12px;color:#777;">${s.bulanNama} ${s.tahun}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="font-weight:800;font-size:15px;color:#6b3fa0;">RM ${s.jumlahBersih.toFixed(2)}</div>
+        <button onclick="muatDariSejarah('${s.key}')" style="background:#6b3fa0;color:#f5c842;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;">📂 Muat</button>
+        <button onclick="padamSejarah('${s.key}')" style="background:#fde8e8;color:#c0392b;border:none;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer;">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+function muatDariSejarah(key) {
+  let sejarah = [];
+  try { sejarah = JSON.parse(localStorage.getItem("gajiLDI_sejarah") || "[]"); } catch(e) { sejarah = []; }
+  const entry = sejarah.find(s => s.key === key);
+  if (!entry) return;
+  isikanData(entry.snapshot);
+  document.querySelectorAll(".pane").forEach(p=>p.classList.remove("active"));
+  document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+  document.getElementById("pane-input").classList.add("active");
+  document.querySelector('.tab-btn').classList.add("active");
+}
+
+function padamSejarah(key) {
+  if (!confirm("Padam rekod ni dari Sejarah (kekal dipadam dari cloud juga)?")) return;
+  let sejarah = [];
+  try { sejarah = JSON.parse(localStorage.getItem("gajiLDI_sejarah") || "[]"); } catch(e) { sejarah = []; }
+  const entry = sejarah.find(s => s.key === key);
+  sejarah = sejarah.filter(s => s.key !== key);
+  localStorage.setItem("gajiLDI_sejarah", JSON.stringify(sejarah));
+  renderSejarahLocal();
+
+  if (supaGaji && supaUserId && entry) {
+    supaGaji.from('payslip_history').delete()
+      .eq('user_id', supaUserId).eq('nama', entry.nama).eq('bulan', entry.bulan).eq('tahun', entry.tahun)
+      .then(() => renderSejarah());
+  }
+}
+
+function hantarKeRekodGaji() {
+  kira();
+  const nama = document.getElementById("inpNama").value.trim();
+  const jumlahBersihText = document.getElementById("slipBersih").textContent || "RM 0.00";
+  const jumlahBersih = parseFloat(jumlahBersihText.replace(/[^\d.]/g, "")) || 0;
+  if (!nama || jumlahBersih <= 0) {
+    alert("Sila isi nama pekerja dan pastikan gaji bersih lebih dari RM 0 dahulu.");
+    return;
+  }
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({ type: "gajiHantar", nama, jumlah: jumlahBersih }, "*");
+  } else {
+    alert("Ciri ini hanya berfungsi bila dibuka dalam apps kewangan Dapur Ibu.");
+  }
+}
+
 
 function muatData() {
   try {
@@ -987,6 +1149,7 @@ function tukarTab(id,btn){
   // Kira semua setiap kali tab ditukar supaya preview sentiasa terkini
   kira();
   kiraCuti();
+  if (id === "sejarah") renderSejarah();
 }
 
 function doPrint(){
@@ -1094,160 +1257,6 @@ ${cutiH}
     fr.contentWindow.print();
     setTimeout(function(){ fr.style.display="none"; },1000);
   },400);
-}
-</script>
-<iframe id="printFrame" style="display:none;border:none;"></iframe>
-</body>
-</html>
-  const y=getThn(), m=getBln(), n=nHari(y,m);
-  let tm=0, hk=0;
-  for(let d=1;d<=n;d++){const mn=getMin(d);if(mn>0){tm+=mn;hk++;}}
-  const totalJam=tm/60;
-
-  const nama    = document.getElementById("inpNama").value||"_______________";
-  const kp      = document.getElementById("inpKP").value||"–";
-  const jawatan = document.getElementById("inpJawatan").value||"–";
-  const tJoin   = document.getElementById("inpTarikhJoin").value||"–";
-  const bulanTxt= BNAM[m]+" "+y;
-  const tarikhCetak = "Dicetak: "+new Date().toLocaleDateString("ms-MY");
-  const kadarTxt= modKira==="jam"?`RM ${document.getElementById("inpKadar").value||0}/jam`:`RM ${document.getElementById("inpGaji").value||0}/bulan`;
-
-  const gajiK   = modKira==="jam" ? totalJam*(parseFloat(document.getElementById("inpKadar").value)||0) : parseFloat(document.getElementById("inpGaji").value)||0;
-  const elaunV  = parseFloat(document.getElementById("inpElaun").value)||0;
-  const potLainV= parseFloat(document.getElementById("inpPotLain").value)||0;
-  const jamStd  = parseFloat(document.getElementById("inpJamStd").value)||208;
-  const otKadar = parseFloat(document.getElementById("inpOTkadar").value)||0;
-  const jamOT   = Math.max(0,+(totalJam-jamStd).toFixed(2));
-  const otJumlah= +(jamOT*otKadar).toFixed(2);
-  const jPd     = gajiK+elaunV+otJumlah;
-
-  const epfOn   = document.getElementById("togEPF").checked;
-  const socsoOn = document.getElementById("togSOCSO").checked;
-  const eisOn   = document.getElementById("togEIS").checked;
-  const epfPK   = epfOn   ? (parseFloat(document.getElementById("inpEPFpk").value)||0)   : 0;
-  const epfMJ   = epfOn   ? (parseFloat(document.getElementById("inpEPFmj").value)||0)   : 0;
-  const socsoPK = socsoOn ? (parseFloat(document.getElementById("inpSOCSOpk").value)||0) : 0;
-  const socsoMJ = socsoOn ? (parseFloat(document.getElementById("inpSOCSOmj").value)||0) : 0;
-  const eisPK   = eisOn   ? (parseFloat(document.getElementById("inpEISpk").value)||0)   : 0;
-  const eisMJ   = eisOn   ? (parseFloat(document.getElementById("inpEISmj").value)||0)   : 0;
-  const jPt     = epfPK+socsoPK+eisPK+potLainV;
-  const gBsh    = jPd-jPt;
-  const jMj     = epfMJ+socsoMJ+eisMJ;
-
-  // Cuti
-  let ct=0,of=0,ph=0,phK=0;
-  for(let d=1;d<=n;d++){const dat=D[d]||{};if(dat.cuti){if(dat.jenisCuti==="CT")ct++;else if(dat.jenisCuti==="OF")of++;else if(dat.jenisCuti==="PH")ph++;}else if(dat.phBekerja)phK++;}
-  const hakCT   = parseInt(document.getElementById("inpCutiHak").value)||0;
-  const diambil = parseInt(document.getElementById("inpCutiDiambil").value)||0;
-  const bakiCT  = hakCT+phK-diambil;
-
-  // Bina HTML pendapatan
-  let pdH=`<div class="sr"><span>${modKira==="jam"?"Gaji Berasas Jam":"Gaji Pokok"}</span><span>${rm(gajiK)}</span></div>`;
-  if(elaunV>0)   pdH+=`<div class="sr"><span>Elaun / Tambahan</span><span>${rm(elaunV)}</span></div>`;
-  if(otJumlah>0) pdH+=`<div class="sr"><span>Overtime (${jamOT.toFixed(2)} jam × RM${otKadar.toFixed(2)})</span><span>${rm(otJumlah)}</span></div>`;
-  pdH+=`<hr style="border:none;border-top:1px solid #ddd;margin:8px 0"><div class="sr bold"><span>Jumlah Pendapatan</span><span>${rm(jPd)}</span></div>`;
-
-  // Bina HTML potongan
-  let ptH="";
-  if(epfOn)    ptH+=`<div class="sr"><span>EPF (Pekerja 11%)</span><span>${rm(epfPK)}</span></div>`;
-  if(socsoOn)  ptH+=`<div class="sr"><span>SOCSO (Pekerja 0.5%)</span><span>${rm(socsoPK)}</span></div>`;
-  if(eisOn)    ptH+=`<div class="sr"><span>EIS (Pekerja 0.2%)</span><span>${rm(eisPK)}</span></div>`;
-  if(potLainV>0) ptH+=`<div class="sr"><span>Potongan Lain</span><span>${rm(potLainV)}</span></div>`;
-  if(jPt>0)    ptH+=`<hr style="border:none;border-top:1px solid #ddd;margin:8px 0"><div class="sr bold"><span>Jumlah Potongan</span><span>${rm(jPt)}</span></div>`;
-  if(!ptH)     ptH=`<div style="font-size:12px;color:#aaa">Tiada potongan</div>`;
-
-  // Majikan
-  let mjH="";
-  if(jMj>0){
-    if(epfOn&&epfMJ>0)   mjH+=`<span>EPF Majikan: <b>${rm(epfMJ)}</b></span>`;
-    if(socsoOn&&socsoMJ>0) mjH+=`<span>SOCSO Majikan: <b>${rm(socsoMJ)}</b></span>`;
-    if(eisOn&&eisMJ>0)   mjH+=`<span>EIS Majikan: <b>${rm(eisMJ)}</b></span>`;
-    mjH+=`<span style="margin-left:auto;font-weight:700">Jumlah: ${rm(jMj)}</span>`;
-  }
-
-  // Cuti HTML
-  let cutiH="";
-  if(hakCT>0||ct>0||of>0||ph>0||phK>0){
-    cutiH=`<div style="padding:8px 20px;border-bottom:1px solid #ccc;font-size:11px;">
-      <div style="font-weight:700;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;">Rekod Cuti</div>
-      <div style="display:flex;gap:16px;flex-wrap:wrap;">
-        <span>Cuti Tahunan: <b>${ct}</b> hari</span>
-        <span>Off Day: <b>${of}</b> hari</span>
-        <span>Public Holiday: <b>${ph}</b> hari</span>
-        ${phK>0?`<span>Bekerja PH (+Cuti Ganti): <b>${phK}</b> hari</span>`:""}
-        <span style="margin-left:auto;">Hak: <b>${hakCT}</b> · Diambil: <b>${diambil}</b> · Baki: <b>${bakiCT}</b> hari</span>
-      </div>
-    </div>`;
-  }
-
-  const tetingkap = window.open('','_blank','width=820,height=900');
-  if(!tetingkap){ alert("Sila benarkan pop-up di browser Ibu untuk print!"); return; }
-  tetingkap.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>Slip Gaji - Legasi Dapur Ibu</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Segoe UI',sans-serif;color:#222;background:white;padding:16px;font-size:13px;}
-.slip{border:2px solid #222;width:100%;}
-.slip-header{border-bottom:3px solid #222;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;}
-.co{font-weight:800;font-size:19px;}
-.sub{font-size:10px;font-weight:600;color:#555;letter-spacing:1px;text-transform:uppercase;margin-top:3px;}
-.bln{font-weight:700;font-size:14px;text-align:right;}
-.tc{font-size:10px;color:#777;text-align:right;margin-top:2px;}
-.info-grid{display:grid;grid-template-columns:1fr 1fr 1fr;border-bottom:2px solid #222;}
-.ic{padding:8px 14px;border-right:1px solid #ccc;border-bottom:1px solid #ccc;}
-.ic:nth-child(3),.ic:nth-child(6){border-right:none;}
-.ic:nth-child(4),.ic:nth-child(5),.ic:nth-child(6){border-bottom:none;}
-.lbl2{font-size:10px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.5px;}
-.val{font-weight:600;font-size:13px;color:#222;margin-top:2px;}
-.slip-body{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #ccc;}
-.slip-col{padding:14px 18px;}
-.slip-col:first-child{border-right:1px solid #ccc;}
-.slip-col-head{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:1px;padding-bottom:6px;margin-bottom:8px;border-bottom:1.5px solid #222;}
-.sr{display:flex;justify-content:space-between;padding:3px 0;font-size:13px;}
-.sr span:first-child{color:#555;}
-.sr.bold span{font-weight:700;color:#222;}
-.bersih{border-top:3px solid #222;border-bottom:3px solid #222;padding:13px 20px;display:flex;justify-content:space-between;align-items:center;}
-.lb{font-weight:800;font-size:13px;text-transform:uppercase;}
-.am{font-weight:800;font-size:26px;}
-.mj{padding:8px 20px;border-bottom:1px dashed #ccc;font-size:12px;}
-.mjl{font-size:10px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;}
-.mjr{display:flex;gap:16px;flex-wrap:wrap;color:#555;}
-.ttd{padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:48px;}
-.ttd-box{text-align:center;}
-.ttd-line{height:48px;border-bottom:1px solid #222;margin-bottom:6px;}
-.ttd-nm{font-size:11px;color:#555;}
-.ttd-wh{font-size:11px;font-weight:700;margin-top:2px;}
-@page{margin:8mm;size:A4;}
-@media print{body{padding:0;}}
-</style></head><body>
-<div class="slip">
-  <div class="slip-header">
-    <div><div class="co">LEGASI DAPUR IBU</div><div class="sub">Slip Gaji Pekerja</div></div>
-    <div><div class="bln">${bulanTxt}</div><div class="tc">${tarikhCetak}</div></div>
-  </div>
-  <div class="info-grid">
-    <div class="ic"><div class="lbl2">Nama Pekerja</div><div class="val">${nama}</div></div>
-    <div class="ic"><div class="lbl2">No. Kad Pengenalan</div><div class="val">${kp}</div></div>
-    <div class="ic"><div class="lbl2">Jawatan</div><div class="val">${jawatan}</div></div>
-    <div class="ic"><div class="lbl2">Tarikh Mula Berkhidmat</div><div class="val">${tJoin}</div></div>
-    <div class="ic"><div class="lbl2">Hari Bekerja</div><div class="val">${hk} hari</div></div>
-    <div class="ic"><div class="lbl2">Kadar Gaji</div><div class="val">${kadarTxt}</div></div>
-  </div>
-  <div class="slip-body">
-    <div class="slip-col"><div class="slip-col-head">Pendapatan</div>${pdH}</div>
-    <div class="slip-col"><div class="slip-col-head">Potongan</div>${ptH}</div>
-  </div>
-  <div class="bersih"><div class="lb">Gaji Bersih</div><div class="am">${rm(gBsh)}</div></div>
-  ${jMj>0?`<div class="mj"><div class="mjl">Caruman Majikan (Maklumat Sahaja)</div><div class="mjr">${mjH}</div></div>`:""}
-  ${cutiH}
-  <div class="ttd">
-    <div class="ttd-box"><div class="ttd-line"></div><div class="ttd-nm">Tandatangan Pekerja</div><div class="ttd-wh">${nama}</div></div>
-    <div class="ttd-box"><div class="ttd-line"></div><div class="ttd-nm">Tandatangan Majikan / Cap Syarikat</div><div class="ttd-wh">LEGASI DAPUR IBU</div></div>
-  </div>
-</div>
-<script>window.onload=function(){window.print();}<\/script>
-</body></html>`);
-  tetingkap.document.close();
 }
 
 </script>
