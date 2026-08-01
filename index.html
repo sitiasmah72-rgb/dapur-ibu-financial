@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dapur Ibu - Financial Manager</title>
+<link rel="icon" type="image/png" href="assets/icon-192.png">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
@@ -167,8 +169,7 @@ main { padding: 0 16px 16px; max-width: 480px; margin: 0 auto; }
 <div id="authScreen" class="hidden" style="display:none;">
   <div class="auth-card">
     <div class="auth-brand">
-      <div class="emoji">🥧</div>
-      <h1>Dapur Ibu</h1>
+      <img src="assets/logo.png" alt="Rumah Dessert Dapur Ibu" style="max-width:220px; width:70%; height:auto; margin:0 auto 4px;">
       <p>Financial Manager</p>
     </div>
     <div class="auth-toggle">
@@ -186,9 +187,11 @@ main { padding: 0 16px 16px; max-width: 480px; margin: 0 auto; }
 
 <div id="appRoot" style="display:none;">
   <div class="top">
-    <div>
-      <h1>🥧 Dapur Ibu</h1>
-      <div class="sub">Financial Manager</div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <img src="assets/logo.png" alt="Dapur Ibu" style="height:36px; width:auto;">
+      <div>
+        <div class="sub" style="margin-top:0;">Financial Manager</div>
+      </div>
     </div>
     <button class="btn btn-secondary" id="logoutBtn" style="flex:none;padding:6px 12px;font-size:0.75rem;">Log Keluar</button>
   </div>
