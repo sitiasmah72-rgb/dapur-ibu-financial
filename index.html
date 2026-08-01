@@ -69,15 +69,41 @@ main { padding: 0 16px 16px; max-width: 480px; margin: 0 auto; }
 .fab.hidden-fab { display: none; }
 .bottomnav {
   position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface);
-  border-top: 1px solid var(--border); display: flex; height: 64px; overflow-x:auto;
+  border-top: 1px solid var(--border); display: flex; height: 64px;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 .bottomnav button {
-  flex: 1; min-width:64px; background: none; border: none;
+  flex: 1; min-width:0; background: none; border: none;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 2px; font-size: 0.63rem; color: var(--text-muted); cursor: pointer;
+  gap: 3px; font-size: 0.68rem; color: var(--text-muted); cursor: pointer;
 }
 .bottomnav button.active { color: var(--primary-dark); font-weight: 700; }
-.bottomnav .icon { font-size: 1.15rem; }
+.bottomnav .icon { font-size: 1.3rem; }
+.more-sheet {
+  display: none; position: fixed; inset: 0; background: rgba(59,46,51,0.4);
+  align-items: flex-end; justify-content: center; z-index: 55;
+}
+.more-sheet.show { display: flex; }
+.more-sheet-panel {
+  background: var(--surface); border-radius: 20px 20px 0 0; padding: 10px 12px calc(24px + env(safe-area-inset-bottom));
+  width: 100%; max-width: 480px;
+}
+.more-sheet-panel h3 { padding: 10px 8px; font-size: 1rem; }
+.more-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 10px; border-radius: 12px; font-weight: 600; font-size: 0.95rem;
+  color: var(--text); background: none; border: none; width: 100%; text-align: left; cursor: pointer;
+}
+.more-item:active { background: var(--surface-alt); }
+.more-item .icon { font-size: 1.3rem; width: 28px; text-align: center; }
+.toast {
+  position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%);
+  background: var(--text); color: #fff; padding: 10px 18px; border-radius: 30px;
+  font-size: 0.85rem; z-index: 90; opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+  white-space: nowrap;
+}
+.toast.show { opacity: 1; }
+.toast.err { background: var(--negative); }
 .page { display: none; }
 .page.active { display: block; }
 .modal-bg {
@@ -187,9 +213,13 @@ main { padding: 0 16px 16px; max-width: 480px; margin: 0 auto; }
           <div class="card-title">Jumlah Ada</div>
           <div class="card-value num" id="sumBalance">RM 0.00</div>
         </div>
+        <div class="card">
+          <div class="card-title">Hutang</div>
+          <div class="card-value negative num" id="sumHutang">RM 0.00</div>
+        </div>
       </div>
 
-      <div class="section-title">Transaksi Terkini</div>
+      <div class="section-title">Transaksi Hari Ini</div>
       <div id="recentList"></div>
     </section>
 
@@ -208,6 +238,12 @@ main { padding: 0 16px 16px; max-width: 480px; margin: 0 auto; }
     <!-- DUIT KELUAR -->
     <section class="page" id="page-keluar">
       <div class="section-title">🧾 Duit Keluar</div>
+      <div class="today-banner">
+        <div>
+          <div class="label">KELUAR HARI INI</div>
+          <div class="value num" id="todayExpense">RM 0.00</div>
+        </div>
+      </div>
       <div id="expenseList"></div>
     </section>
 
@@ -223,7 +259,14 @@ main { padding: 0 16px 16px; max-width: 480px; margin: 0 auto; }
     <!-- GAJI -->
     <section class="page" id="page-gaji">
       <div class="section-title">👥 Gaji Pekerja</div>
+      <div class="notice ref">📌 Ini rekod ringkas untuk kira Hutang automatik. Nak kira gaji penuh (OT, EPF, SOCSO, cuti)? Pergi ke "Lagi → Kalkulator Gaji Penuh".</div>
       <div id="payrollList"></div>
+    </section>
+
+    <!-- KALKULATOR GAJI PENUH (app Gaji sedia ada, dalam skrin) -->
+    <section class="page" id="page-kalkulatorgaji" style="margin:0 -16px -16px; width:calc(100% + 32px);">
+      <iframe src="gaji-kalkulator.html" title="Kalkulator Gaji Penuh"
+        style="width:100%; height:calc(100vh - 64px); border:none; display:block;"></iframe>
     </section>
 
     <!-- AKAUN -->
@@ -291,14 +334,23 @@ main { padding: 0 16px 16px; max-width: 480px; margin: 0 auto; }
     <button data-page="dashboard" class="active"><span class="icon">🏠</span>Dashboard</button>
     <button data-page="masuk"><span class="icon">💰</span>Masuk</button>
     <button data-page="keluar"><span class="icon">🧾</span>Keluar</button>
-    <button data-page="beli"><span class="icon">🛒</span>Beli</button>
-    <button data-page="gaji"><span class="icon">👥</span>Gaji</button>
-    <button data-page="hutang"><span class="icon">📉</span>Hutang</button>
-    <button data-page="akaun"><span class="icon">🏦</span>Akaun</button>
-    <button data-page="laporan"><span class="icon">📊</span>Laporan</button>
-    <button data-page="carian"><span class="icon">🔍</span>Cari</button>
+    <button id="btnMore"><span class="icon">⋯</span>Lagi</button>
   </nav>
 </div>
+
+<div class="more-sheet" id="moreSheet">
+  <div class="more-sheet-panel">
+    <h3>Lagi</h3>
+    <button class="more-item" data-page="gaji"><span class="icon">👥</span> Gaji (Ringkas + Hutang)</button>
+    <button class="more-item" data-page="kalkulatorgaji"><span class="icon">🧮</span> Kalkulator Gaji Penuh</button>
+    <button class="more-item" data-page="hutang"><span class="icon">📉</span> Hutang</button>
+    <button class="more-item" data-page="akaun"><span class="icon">🏦</span> Akaun</button>
+    <button class="more-item" data-page="laporan"><span class="icon">📊</span> Laporan &amp; Backup</button>
+    <button class="more-item" data-page="carian"><span class="icon">🔍</span> Carian</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
 
 <div class="modal-bg" id="modalBg">
   <div class="modal">
@@ -418,7 +470,8 @@ function mapPayrollFromDb(r) {
 }
 function mapDebtFromDb(r) {
   return { id: r.id, pemiutang: r.pemiutang, jumlah: Number(r.jumlah), baki: Number(r.baki),
-    bayaranBulanan: Number(r.bayaran_bulanan) || 0, tarikhAkhir: r.tarikh_akhir, status: r.status };
+    bayaranBulanan: Number(r.bayaran_bulanan) || 0, tarikhAkhir: r.tarikh_akhir, status: r.status,
+    jenis: r.jenis || 'lain', kaedah: r.kaedah || null, catatan: r.catatan || '' };
 }
 
 // ============================================================
@@ -469,11 +522,35 @@ function computeAccounts() {
   const cashIncome = DATA.income.filter(x => x.kaedah === 'Cash').reduce((s,x)=>s+Number(x.jumlah),0);
   const bankIncome = DATA.income.filter(x => x.kaedah !== 'Cash').reduce((s,x)=>s+Number(x.jumlah),0);
 
-  const cashExpense = DATA.expense.filter(x => x.kaedah === 'Cash').reduce((s,x)=>s+Number(x.jumlah),0);
-  const bankExpense = DATA.expense.filter(x => x.kaedah !== 'Cash').reduce((s,x)=>s+Number(x.jumlah),0);
+  // ---- Susun Duit Keluar ikut tarikh (lama ke baru) untuk kenalpasti belanja mana yang tak cukup baki ----
+  const cashExpensesSorted = [...DATA.expense].filter(x => x.kaedah === 'Cash').sort((a,b)=>new Date(a.tarikh)-new Date(b.tarikh));
+  const bankExpensesSorted = [...DATA.expense].filter(x => x.kaedah !== 'Cash').sort((a,b)=>new Date(a.tarikh)-new Date(b.tarikh));
 
-  let cash = Number(DATA.startingCash) + cashIncome - cashExpense;
-  let bank = Number(DATA.startingBank) + bankIncome - bankExpense;
+  let cash = Number(DATA.startingCash) + cashIncome;
+  let bank = Number(DATA.startingBank) + bankIncome;
+
+  // ---- Duit dari Pinjaman (Hutang jenis "pinjaman") turut masuk Cash/Bank ----
+  // Baki hutang semasa = jumlah duit pinjaman yang masih "ada kesan" dalam akaun
+  // (bila Ibu bayar balik, baki berkurang, secara automatik kurangkan sumbangan ni)
+  const pinjamanCash = DATA.debts.filter(d => d.jenis === 'pinjaman' && d.kaedah === 'Cash').reduce((s,d)=>s+Number(d.baki),0);
+  const pinjamanBank = DATA.debts.filter(d => d.jenis === 'pinjaman' && d.kaedah === 'Bank').reduce((s,d)=>s+Number(d.baki),0);
+  cash += pinjamanCash;
+  bank += pinjamanBank;
+
+  let hutangBelanja = 0;
+  const belanjaTakCukup = []; // senarai belanja yang menyebabkan kekurangan
+
+  cashExpensesSorted.forEach(x => {
+    cash -= Number(x.jumlah);
+    if (cash < 0) { hutangBelanja += -cash; belanjaTakCukup.push(x); cash = 0; }
+  });
+  bankExpensesSorted.forEach(x => {
+    bank -= Number(x.jumlah);
+    if (bank < 0) { hutangBelanja += -bank; belanjaTakCukup.push(x); bank = 0; }
+  });
+
+  const cashExpense = cashExpensesSorted.reduce((s,x)=>s+Number(x.jumlah),0);
+  const bankExpense = bankExpensesSorted.reduce((s,x)=>s+Number(x.jumlah),0);
 
   const duePayroll = DATA.payroll.filter(x => x.tarikhBayar <= today);
   const upcomingPayroll = DATA.payroll.filter(x => x.tarikhBayar > today);
@@ -488,52 +565,60 @@ function computeAccounts() {
   if (bank < 0) { hutangGaji += -bank; bank = 0; }
 
   const hutangLain = DATA.debts.filter(d => d.status !== 'selesai').reduce((s,d)=>s+Number(d.baki),0);
-  const hutang = hutangGaji + hutangLain;
+  const hutang = hutangGaji + hutangBelanja + hutangLain;
 
   const totalIncome = cashIncome + bankIncome;
   const totalExpense = cashExpense + bankExpense;
   const totalPayrollDue = duePayrollCash + duePayrollBank;
   const totalPayrollUpcoming = upcomingPayroll.reduce((s,x)=>s+Number(x.jumlah),0);
 
-  return { cash, bank, hutang, hutangGaji, hutangLain, cashIncome, bankIncome, totalIncome, totalExpense, totalPayrollDue, totalPayrollUpcoming };
+  return { cash, bank, hutang, hutangGaji, hutangBelanja, hutangLain, belanjaTakCukup, cashIncome, bankIncome, totalIncome, totalExpense, totalPayrollDue, totalPayrollUpcoming };
 }
 
 function renderAccounts() {
-  const { cash, bank, hutang, hutangGaji, hutangLain, totalPayrollUpcoming } = computeAccounts();
+  const { cash, bank, hutang, hutangGaji, hutangBelanja, hutangLain, belanjaTakCukup, totalPayrollUpcoming } = computeAccounts();
   document.getElementById('accCash').textContent = fmt(cash);
   document.getElementById('accBank').textContent = fmt(bank);
   document.getElementById('accHutang').textContent = fmt(hutang);
   const note = document.getElementById('hutangNote');
   let msgs = [];
+  if (hutangBelanja > 0) {
+    msgs.push('🧾 Hutang RM ' + hutangBelanja.toFixed(2) + ' terjana sebab perbelanjaan (Duit Keluar) melebihi baki Cash/Bank.');
+    const senarai = belanjaTakCukup.slice(-3).map(x => `${x.item || 'Belanja'} (${x.tarikh}, ${x.kaedah})`).join('; ');
+    if (senarai) msgs.push('&nbsp;&nbsp;↳ Punca kemungkinan: ' + senarai);
+  }
   if (hutangGaji > 0) msgs.push('⚠️ Hutang RM ' + hutangGaji.toFixed(2) + ' terjana sebab Cash/Bank tak cukup untuk tampung gaji yang dah sampai tarikh.');
-  if (hutangLain > 0) msgs.push('📉 Hutang lain (pinjaman/bekalan): RM ' + hutangLain.toFixed(2) + ' — lihat halaman Hutang.');
+  if (hutangLain > 0) msgs.push('📉 Hutang lain (pinjaman/bekalan): RM ' + hutangLain.toFixed(2) + ' — lihat halaman Hutang untuk butiran.');
   if (totalPayrollUpcoming > 0) msgs.push('🗓️ RM ' + totalPayrollUpcoming.toFixed(2) + ' gaji akan datang (belum sampai tarikh) — belum ditolak dari akaun lagi.');
   if (msgs.length) { note.style.display = 'block'; note.innerHTML = msgs.join('<br>'); }
   else { note.style.display = 'none'; }
 }
 
 function renderDashboard() {
-  const { cash, bank, cashIncome, bankIncome, totalExpense, totalPayrollDue } = computeAccounts();
-  document.getElementById('sumIncomeCash').textContent = fmt(cashIncome);
-  document.getElementById('sumIncomeBank').textContent = fmt(bankIncome);
-  document.getElementById('sumExpense').textContent = fmt(totalExpense + totalPayrollDue);
-  document.getElementById('sumBalance').textContent = fmt(cash + bank);
-
+  const { cash, bank, hutang } = computeAccounts();
   const today = todayStr();
+
+  const todayCashIncome = DATA.income.filter(x => x.tarikh === today && x.kaedah === 'Cash').reduce((s,x)=>s+Number(x.jumlah),0);
+  const todayBankIncome = DATA.income.filter(x => x.tarikh === today && x.kaedah !== 'Cash').reduce((s,x)=>s+Number(x.jumlah),0);
+  const todayExpenseTotal = DATA.expense.filter(x => x.tarikh === today).reduce((s,x)=>s+Number(x.jumlah),0);
+  const todayPayroll = DATA.payroll.filter(x => x.tarikhBayar === today).reduce((s,x)=>s+Number(x.jumlah),0);
+
+  document.getElementById('sumIncomeCash').textContent = fmt(todayCashIncome);
+  document.getElementById('sumIncomeBank').textContent = fmt(todayBankIncome);
+  document.getElementById('sumExpense').textContent = fmt(todayExpenseTotal + todayPayroll);
+  document.getElementById('sumBalance').textContent = fmt(cash + bank);
+  document.getElementById('sumHutang').textContent = fmt(hutang);
   const idTime = (id) => { const m = String(id).match(/\d+/); return m ? parseInt(m[0]) : 0; };
 
   const all = [
-    ...DATA.income.map(x => ({...x, jenis:'masuk', label: '💰 ' + (x.sumber || 'Jualan') + ' · ' + (x.kaedah || 'Cash')})),
-    ...DATA.expense.map(x => ({...x, jenis:'keluar', label: '🧾 ' + (x.item || '-') + ' · ' + (x.kaedah || 'Cash')})),
-    ...DATA.payroll.filter(x => x.tarikhBayar <= today).map(x => ({...x, jenis:'keluar', label: '👥 Gaji ' + x.nama + ' · ' + (x.kaedah || 'Cash'), tarikh: x.tarikhBayar})),
-  ].sort((a,b) => {
-    const d = new Date(b.tarikh) - new Date(a.tarikh);
-    return d !== 0 ? d : idTime(b.id) - idTime(a.id);
-  }).slice(0, 10);
+    ...DATA.income.filter(x => x.tarikh === today).map(x => ({...x, jenis:'masuk', label: '💰 ' + (x.sumber || 'Jualan') + ' · ' + (x.kaedah || 'Cash')})),
+    ...DATA.expense.filter(x => x.tarikh === today).map(x => ({...x, jenis:'keluar', label: '🧾 ' + (x.item || '-') + ' · ' + (x.kaedah || 'Cash')})),
+    ...DATA.payroll.filter(x => x.tarikhBayar === today).map(x => ({...x, jenis:'keluar', label: '👥 Gaji ' + x.nama + ' · ' + (x.kaedah || 'Cash'), tarikh: x.tarikhBayar})),
+  ].sort((a,b) => idTime(b.id) - idTime(a.id));
 
   const el = document.getElementById('recentList');
   el.innerHTML = all.length === 0
-    ? '<div class="empty">Belum ada transaksi. Tekan + untuk tambah.</div>'
+    ? '<div class="empty">Tiada transaksi hari ini lagi. Tekan + untuk tambah.</div>'
     : all.map(x => `
       <div class="list-item">
         <div class="info"><div class="t1">${x.label}</div><div class="t2">${x.tarikh}</div></div>
@@ -557,6 +642,10 @@ function renderIncome() {
 }
 
 function renderExpense() {
+  const today = todayStr();
+  const todayTotal = DATA.expense.filter(x => x.tarikh === today).reduce((s,x)=>s+Number(x.jumlah),0);
+  document.getElementById('todayExpense').textContent = fmt(todayTotal);
+
   const el = document.getElementById('expenseList');
   el.innerHTML = DATA.expense.length === 0 ? '<div class="empty">Tiada rekod lagi.</div>' :
     [...DATA.expense].sort((a,b)=>new Date(b.tarikh)-new Date(a.tarikh)).map(x => `
@@ -641,7 +730,10 @@ function renderDebts() {
   el.innerHTML = [...DATA.debts].map(d => `
     <div class="ing-card">
       <div class="ing-head">
-        <div class="name">${d.pemiutang} <span class="tag ${d.status==='selesai'?'':'warn'}">${d.status==='selesai'?'Selesai':'Aktif'}</span></div>
+        <div class="name">${d.pemiutang}
+          <span class="tag ${d.status==='selesai'?'':'warn'}">${d.status==='selesai'?'Selesai':'Aktif'}</span>
+          ${d.jenis === 'pinjaman' ? `<span class="tag">💵 Pinjaman (${d.kaedah})</span>` : ''}
+        </div>
         <div class="actions">
           <button onclick="bayarHutang('${d.id}')">💵</button>
           <button onclick="editDebt('${d.id}')">✎</button>
@@ -654,23 +746,28 @@ function renderDebts() {
         <div><div class="lbl">Bayaran Bulanan</div><div class="val">${d.bayaranBulanan ? fmt(d.bayaranBulanan) : '-'}</div></div>
         <div><div class="lbl">Tarikh Akhir</div><div class="val">${d.tarikhAkhir || '-'}</div></div>
       </div>
+      ${d.catatan ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:8px;">📝 ${d.catatan}</div>` : ''}
     </div>`).join('');
 }
 
 function editDebt(id) { editingDebtId = id; openModal('debt'); }
 
-async function bayarHutang(id) {
+function bayarHutang(id) {
   const d = DATA.debts.find(x => x.id === id);
   if (!d) return;
   const input = prompt('Jumlah bayaran untuk ' + d.pemiutang + ' (baki semasa ' + fmt(d.baki) + '):', '');
   const amt = parseFloat(input);
   if (!amt || amt <= 0) return;
+  const oldBaki = d.baki, oldStatus = d.status;
   const newBaki = Math.max(0, d.baki - amt);
   const newStatus = newBaki === 0 ? 'selesai' : d.status;
-  const { error } = await supabaseClient.from('debts').update({ baki: newBaki, status: newStatus }).eq('id', id);
-  if (error) { alert('Gagal simpan ke pangkalan data: ' + error.message); return; }
   d.baki = newBaki; d.status = newStatus;
-  renderAll();
+  renderAll(); showToast('Menyimpan...');
+  supabaseClient.from('debts').update({ baki: newBaki, status: newStatus }).eq('id', id)
+    .then(({ error }) => {
+      if (error) { d.baki = oldBaki; d.status = oldStatus; renderAll(); showToast('Gagal simpan. Cuba lagi.', true); }
+      else { showToast('Disimpan ✓'); }
+    });
 }
 
 // ---------- Laporan ----------
@@ -739,22 +836,59 @@ function editPurchase(id) {
   openModal('purchase');
 }
 
-async function deleteItem(type, id) {
-  const { error } = await supabaseClient.from(type).delete().eq('id', id);
-  if (error) { alert('Gagal padam: ' + error.message); return; }
+function deleteItem(type, id) {
+  const idx = DATA[type].findIndex(x => x.id === id);
+  const removed = idx > -1 ? DATA[type][idx] : null;
   DATA[type] = DATA[type].filter(x => x.id !== id);
-  renderAll();
+  renderAll(); showToast('Memadam...');
+  supabaseClient.from(type).delete().eq('id', id).then(({ error }) => {
+    if (error) {
+      if (removed) DATA[type].splice(idx, 0, removed);
+      renderAll(); showToast('Gagal padam. Cuba lagi.', true);
+    } else { showToast('Dipadam ✓'); }
+  });
 }
 
 // ---------- Navigasi ----------
-document.querySelectorAll('.bottomnav button').forEach(btn => {
-  btn.addEventListener('click', () => {
-    currentPage = btn.dataset.page;
-    document.querySelectorAll('.bottomnav button').forEach(b => b.classList.toggle('active', b===btn));
-    document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-'+currentPage));
-    document.getElementById('fabAdd').classList.toggle('hidden-fab', ['dashboard','laporan','carian'].includes(currentPage));
-  });
+function navigateTo(page) {
+  currentPage = page;
+  document.querySelectorAll('.bottomnav button[data-page]').forEach(b => b.classList.toggle('active', b.dataset.page === page));
+  document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-'+page));
+  document.getElementById('fabAdd').classList.toggle('hidden-fab', ['dashboard','laporan','carian','kalkulatorgaji'].includes(page));
+  moreSheet.classList.remove('show');
+}
+
+// ---------- Terima data dari Kalkulator Gaji Penuh (iframe) ----------
+window.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'gajiHantar') {
+    window.pendingPayrollPrefill = { nama: event.data.nama, jumlah: event.data.jumlah };
+    navigateTo('gaji');
+    openModal('payroll');
+    showToast('Sila semak & sahkan sebelum simpan.');
+  }
 });
+
+document.querySelectorAll('.bottomnav button[data-page]').forEach(btn => {
+  btn.addEventListener('click', () => navigateTo(btn.dataset.page));
+});
+
+const moreSheet = document.getElementById('moreSheet');
+document.getElementById('btnMore').addEventListener('click', () => moreSheet.classList.add('show'));
+moreSheet.addEventListener('click', (e) => { if (e.target === moreSheet) moreSheet.classList.remove('show'); });
+document.querySelectorAll('.more-item').forEach(btn => {
+  btn.addEventListener('click', () => navigateTo(btn.dataset.page));
+});
+
+// ---------- Toast (mesej ringkas) ----------
+let toastTimer = null;
+function showToast(msg, isError = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.toggle('err', isError);
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
 
 // ---------- Modal ----------
 const modalBg = document.getElementById('modalBg');
@@ -768,6 +902,7 @@ document.getElementById('fabAdd').addEventListener('click', () => {
   openModal(map[currentPage] || 'income');
 });
 document.getElementById('btnEditSaldo').addEventListener('click', () => openModal('saldo'));
+
 
 function openModal(type) {
   modalBg.dataset.type = type;
@@ -820,10 +955,12 @@ function openModal(type) {
       <div class="field"><label>Kuantiti dalam Karton</label><input type="number" id="f_kuantitikarton" step="1" placeholder="cth: 24" value="${p ? (p.kuantitiKarton||'') : ''}"></div>
       <div class="field"><label>Harga Karton (RM)</label><input type="number" id="f_hargakarton" step="0.01" placeholder="0.00" value="${p ? (p.hargaKarton||'') : ''}"></div>`;
   } else if (type === 'payroll') {
+    const pf = window.pendingPayrollPrefill || {};
+    window.pendingPayrollPrefill = null;
     modalTitle.textContent = '👥 Tambah Gaji';
     modalFields.innerHTML = `
-      <div class="field"><label>Nama Pekerja</label><input type="text" id="f_nama"></div>
-      <div class="field"><label>Jumlah Gaji Bulan Ini (RM)</label><input type="number" id="f_jumlah" step="0.01" placeholder="0.00"></div>
+      <div class="field"><label>Nama Pekerja</label><input type="text" id="f_nama" value="${pf.nama || ''}"></div>
+      <div class="field"><label>Jumlah Gaji Bulan Ini (RM)</label><input type="number" id="f_jumlah" step="0.01" placeholder="0.00" value="${pf.jumlah || ''}"></div>
       <div class="field"><label>Kaedah Bayaran</label>
         <select id="f_kaedah"><option>Cash</option><option>Transfer</option></select>
       </div>
@@ -837,120 +974,187 @@ function openModal(type) {
     const d = editingDebtId ? DATA.debts.find(x => x.id === editingDebtId) : null;
     modalTitle.textContent = editingDebtId ? '✎ Edit Hutang' : '📉 Tambah Hutang';
     modalFields.innerHTML = `
-      <div class="field"><label>Nama Pemiutang</label><input type="text" id="f_pemiutang" placeholder="cth: Bank / Pembekal" value="${d ? d.pemiutang : ''}"></div>
-      <div class="field"><label>Jumlah Hutang Asal (RM)</label><input type="number" id="f_jumlahhutang" step="0.01" value="${d ? d.jumlah : ''}"></div>
+      <div class="field"><label>Sumber / Nama Pemiutang</label><input type="text" id="f_pemiutang" placeholder="cth: Bank ABC / Kak Long / Pembekal" value="${d ? d.pemiutang : ''}"></div>
+      <div class="field"><label>Jumlah (RM)</label><input type="number" id="f_jumlahhutang" step="0.01" value="${d ? d.jumlah : ''}"></div>
+      <div class="field"><label>Jenis Hutang</label>
+        <select id="f_jenishutang">
+          <option value="pinjaman" ${d && d.jenis==='pinjaman' ? 'selected':''}>Pinjaman (duit terus masuk Cash/Bank)</option>
+          <option value="lain" ${d && d.jenis==='lain' ? 'selected':''}>Hutang Lain (bekalan/kredit, tiada duit masuk)</option>
+        </select>
+      </div>
+      <div class="field" id="fieldKaedahPinjaman"><label>Duit Masuk Ke</label>
+        <select id="f_kaedahpinjaman">
+          <option value="Cash" ${d && d.kaedah==='Cash' ? 'selected':''}>Cash</option>
+          <option value="Bank" ${d && d.kaedah==='Bank' ? 'selected':''}>Bank</option>
+        </select>
+      </div>
+      <div class="field"><label>Catatan</label><input type="text" id="f_catatanhutang" placeholder="pilihan, cth: untuk beli oven" value="${d ? (d.catatan||'') : ''}"></div>
       <div class="field"><label>Bayaran Bulanan (RM)</label><input type="number" id="f_bayaranbulanan" step="0.01" placeholder="pilihan" value="${d ? (d.bayaranBulanan||'') : ''}"></div>
       <div class="field"><label>Tarikh Akhir</label><input type="date" id="f_tarikhakhir" value="${d ? (d.tarikhAkhir||'') : ''}"></div>`;
+    setTimeout(() => {
+      const jenisSel = document.getElementById('f_jenishutang');
+      const kaedahField = document.getElementById('fieldKaedahPinjaman');
+      const toggle = () => kaedahField.style.display = jenisSel.value === 'pinjaman' ? 'block' : 'none';
+      jenisSel.addEventListener('change', toggle);
+      toggle();
+    }, 0);
   }
   modalBg.classList.add('show');
 }
 
 document.getElementById('modalCancel').addEventListener('click', () => { editingPurchaseId = null; editingDebtId = null; modalBg.classList.remove('show'); });
 
-document.getElementById('modalSave').addEventListener('click', async () => {
+document.getElementById('modalSave').addEventListener('click', () => {
   const type = modalBg.dataset.type;
-  const saveBtn = document.getElementById('modalSave');
-  saveBtn.disabled = true;
 
-  try {
-    if (type === 'saldo') {
-      const cash = parseFloat(document.getElementById('f_cash').value) || 0;
-      const bank = parseFloat(document.getElementById('f_bank').value) || 0;
-      const { error } = await supabaseClient.from('settings').upsert({ user_id: currentUserId, starting_cash: cash, starting_bank: bank });
-      if (error) throw error;
-      DATA.startingCash = cash; DATA.startingBank = bank;
-      renderAll(); modalBg.classList.remove('show'); return;
-    }
-
-    if (type === 'debt') {
-      const pemiutang = document.getElementById('f_pemiutang').value.trim();
-      const jumlah = parseFloat(document.getElementById('f_jumlahhutang').value);
-      if (!pemiutang || !jumlah || jumlah <= 0) { alert('Sila isi nama pemiutang & jumlah yang sah.'); return; }
-      const bayaranBulanan = parseFloat(document.getElementById('f_bayaranbulanan').value) || 0;
-      const tarikhAkhir = document.getElementById('f_tarikhakhir').value || null;
-
-      if (editingDebtId) {
-        const { data, error } = await supabaseClient.from('debts')
-          .update({ pemiutang, jumlah, bayaran_bulanan: bayaranBulanan, tarikh_akhir: tarikhAkhir })
-          .eq('id', editingDebtId).select().single();
-        if (error) throw error;
-        const idx = DATA.debts.findIndex(x => x.id === editingDebtId);
-        if (idx > -1) DATA.debts[idx] = mapDebtFromDb(data);
-        editingDebtId = null;
-      } else {
-        const { data, error } = await supabaseClient.from('debts')
-          .insert({ user_id: currentUserId, pemiutang, jumlah, baki: jumlah, bayaran_bulanan: bayaranBulanan, tarikh_akhir: tarikhAkhir, status: 'aktif' })
-          .select().single();
-        if (error) throw error;
-        DATA.debts.push(mapDebtFromDb(data));
-      }
-      renderAll(); modalBg.classList.remove('show'); return;
-    }
-
-    if (type === 'payroll') {
-      const nama = document.getElementById('f_nama').value.trim();
-      const jumlah = parseFloat(document.getElementById('f_jumlah').value);
-      if (!nama || !jumlah || jumlah <= 0) { alert('Sila isi nama & jumlah yang sah.'); return; }
-      const { data, error } = await supabaseClient.from('payroll')
-        .insert({ user_id: currentUserId, nama, jumlah, kaedah: document.getElementById('f_kaedah').value, tarikh_bayar: document.getElementById('f_tarikhbayar').value })
-        .select().single();
-      if (error) throw error;
-      DATA.payroll.push(mapPayrollFromDb(data));
-      renderAll(); modalBg.classList.remove('show'); return;
-    }
-
-    if (type === 'purchase') {
-      const bahan = document.getElementById('f_bahan').value.trim();
-      const hargaUnit = parseFloat(document.getElementById('f_hargaunit').value);
-      if (!bahan || !hargaUnit || hargaUnit <= 0) { alert('Sila isi bahan & harga/unit yang sah.'); return; }
-      const record = {
-        bahan,
-        kedai: document.getElementById('f_kedai').value,
-        berat: parseFloat(document.getElementById('f_berat').value) || 0,
-        unit: document.getElementById('f_unit').value,
-        harga_unit: hargaUnit,
-        kuantiti_karton: parseFloat(document.getElementById('f_kuantitikarton').value) || 0,
-        harga_karton: parseFloat(document.getElementById('f_hargakarton').value) || 0,
-      };
-      if (editingPurchaseId) {
-        const { data, error } = await supabaseClient.from('purchases').update(record).eq('id', editingPurchaseId).select().single();
-        if (error) throw error;
-        const idx = DATA.purchases.findIndex(x => x.id === editingPurchaseId);
-        if (idx > -1) DATA.purchases[idx] = mapPurchaseFromDb(data);
-        editingPurchaseId = null;
-      } else {
-        const { data, error } = await supabaseClient.from('purchases').insert({ user_id: currentUserId, ...record }).select().single();
-        if (error) throw error;
-        DATA.purchases.push(mapPurchaseFromDb(data));
-      }
-      renderAll(); modalBg.classList.remove('show'); return;
-    }
-
-    const jumlah = parseFloat(document.getElementById('f_jumlah').value);
-    if (!jumlah || jumlah <= 0) { alert('Sila isi jumlah yang sah.'); return; }
-    const tarikh = document.getElementById('f_tarikh').value;
-    const catatan = document.getElementById('f_catatan') ? document.getElementById('f_catatan').value : '';
-
-    if (type === 'income') {
-      const { data, error } = await supabaseClient.from('income')
-        .insert({ user_id: currentUserId, tarikh, sumber: document.getElementById('f_sumber').value, kaedah: document.getElementById('f_kaedah').value, jumlah, catatan })
-        .select().single();
-      if (error) throw error;
-      DATA.income.push(data);
-    } else if (type === 'expense') {
-      const { data, error } = await supabaseClient.from('expense')
-        .insert({ user_id: currentUserId, tarikh, item: document.getElementById('f_item').value, kaedah: document.getElementById('f_kaedah').value, jumlah, catatan })
-        .select().single();
-      if (error) throw error;
-      DATA.expense.push(data);
-    }
+  // ---------- SALDO (Baki Bermula) ----------
+  if (type === 'saldo') {
+    const cash = parseFloat(document.getElementById('f_cash').value) || 0;
+    const bank = parseFloat(document.getElementById('f_bank').value) || 0;
+    const prevCash = DATA.startingCash, prevBank = DATA.startingBank;
+    DATA.startingCash = cash; DATA.startingBank = bank;
     renderAll(); modalBg.classList.remove('show');
-  } catch (err) {
-    alert('Gagal simpan ke pangkalan data: ' + err.message);
-  } finally {
-    saveBtn.disabled = false;
+    showToast('Menyimpan baki...');
+    supabaseClient.from('settings').upsert({ user_id: currentUserId, starting_cash: cash, starting_bank: bank })
+      .then(({ error }) => {
+        if (error) {
+          DATA.startingCash = prevCash; DATA.startingBank = prevBank; renderAll();
+          showToast('Gagal simpan baki. Cuba lagi.', true);
+        } else { showToast('Baki disimpan ✓'); }
+      });
+    return;
+  }
+
+  // ---------- HUTANG ----------
+  if (type === 'debt') {
+    const pemiutang = document.getElementById('f_pemiutang').value.trim();
+    const jumlah = parseFloat(document.getElementById('f_jumlahhutang').value);
+    if (!pemiutang || !jumlah || jumlah <= 0) { showToast('Sila isi nama & jumlah yang sah.', true); return; }
+    const bayaranBulanan = parseFloat(document.getElementById('f_bayaranbulanan').value) || 0;
+    const tarikhAkhir = document.getElementById('f_tarikhakhir').value || null;
+    const jenis = document.getElementById('f_jenishutang').value;
+    const kaedah = jenis === 'pinjaman' ? document.getElementById('f_kaedahpinjaman').value : null;
+    const catatan = document.getElementById('f_catatanhutang').value;
+
+    if (editingDebtId) {
+      const idx = DATA.debts.findIndex(x => x.id === editingDebtId);
+      const before = idx > -1 ? { ...DATA.debts[idx] } : null;
+      if (idx > -1) DATA.debts[idx] = { ...DATA.debts[idx], pemiutang, jumlah, bayaranBulanan, tarikhAkhir, jenis, kaedah, catatan };
+      const savingId = editingDebtId;
+      editingDebtId = null;
+      renderAll(); modalBg.classList.remove('show'); showToast('Menyimpan...');
+      supabaseClient.from('debts')
+        .update({ pemiutang, jumlah, bayaran_bulanan: bayaranBulanan, tarikh_akhir: tarikhAkhir, jenis, kaedah, catatan })
+        .eq('id', savingId).select().single()
+        .then(({ data, error }) => {
+          if (error) { if (before && idx > -1) DATA.debts[idx] = before; renderAll(); showToast('Gagal simpan hutang. Cuba lagi.', true); }
+          else { const i = DATA.debts.findIndex(x => x.id === savingId); if (i > -1) DATA.debts[i] = mapDebtFromDb(data); renderAll(); showToast('Disimpan ✓'); }
+        });
+    } else {
+      const tempId = 'tmp' + Date.now();
+      DATA.debts.push({ id: tempId, pemiutang, jumlah, baki: jumlah, bayaranBulanan, tarikhAkhir, status: 'aktif', jenis, kaedah, catatan });
+      renderAll(); modalBg.classList.remove('show'); showToast('Menyimpan...');
+      supabaseClient.from('debts')
+        .insert({ user_id: currentUserId, pemiutang, jumlah, baki: jumlah, bayaran_bulanan: bayaranBulanan, tarikh_akhir: tarikhAkhir, status: 'aktif', jenis, kaedah, catatan })
+        .select().single()
+        .then(({ data, error }) => {
+          if (error) { DATA.debts = DATA.debts.filter(x => x.id !== tempId); renderAll(); showToast('Gagal simpan hutang. Cuba lagi.', true); }
+          else { const i = DATA.debts.findIndex(x => x.id === tempId); if (i > -1) DATA.debts[i] = mapDebtFromDb(data); renderAll(); showToast('Disimpan ✓'); }
+        });
+    }
+    return;
+  }
+
+  // ---------- GAJI ----------
+  if (type === 'payroll') {
+    const nama = document.getElementById('f_nama').value.trim();
+    const jumlah = parseFloat(document.getElementById('f_jumlah').value);
+    if (!nama || !jumlah || jumlah <= 0) { showToast('Sila isi nama & jumlah yang sah.', true); return; }
+    const kaedah = document.getElementById('f_kaedah').value;
+    const tarikhBayar = document.getElementById('f_tarikhbayar').value;
+    const tempId = 'tmp' + Date.now();
+    DATA.payroll.push({ id: tempId, nama, jumlah, kaedah, tarikhBayar });
+    renderAll(); modalBg.classList.remove('show'); showToast('Menyimpan...');
+    supabaseClient.from('payroll')
+      .insert({ user_id: currentUserId, nama, jumlah, kaedah, tarikh_bayar: tarikhBayar })
+      .select().single()
+      .then(({ data, error }) => {
+        if (error) { DATA.payroll = DATA.payroll.filter(x => x.id !== tempId); renderAll(); showToast('Gagal simpan gaji. Cuba lagi.', true); }
+        else { const i = DATA.payroll.findIndex(x => x.id === tempId); if (i > -1) DATA.payroll[i] = mapPayrollFromDb(data); renderAll(); showToast('Disimpan ✓'); }
+      });
+    return;
+  }
+
+  // ---------- PEMBELIAN ----------
+  if (type === 'purchase') {
+    const bahan = document.getElementById('f_bahan').value.trim();
+    const hargaUnit = parseFloat(document.getElementById('f_hargaunit').value);
+    if (!bahan || !hargaUnit || hargaUnit <= 0) { showToast('Sila isi bahan & harga/unit yang sah.', true); return; }
+    const record = {
+      bahan,
+      kedai: document.getElementById('f_kedai').value,
+      berat: parseFloat(document.getElementById('f_berat').value) || 0,
+      unit: document.getElementById('f_unit').value,
+      harga_unit: hargaUnit,
+      kuantiti_karton: parseFloat(document.getElementById('f_kuantitikarton').value) || 0,
+      harga_karton: parseFloat(document.getElementById('f_hargakarton').value) || 0,
+    };
+    const recordCamel = mapPurchaseFromDb({ id: null, ...record });
+
+    if (editingPurchaseId) {
+      const idx = DATA.purchases.findIndex(x => x.id === editingPurchaseId);
+      const before = idx > -1 ? { ...DATA.purchases[idx] } : null;
+      if (idx > -1) DATA.purchases[idx] = { ...DATA.purchases[idx], ...recordCamel };
+      const savingId = editingPurchaseId;
+      editingPurchaseId = null;
+      renderAll(); modalBg.classList.remove('show'); showToast('Menyimpan...');
+      supabaseClient.from('purchases').update(record).eq('id', savingId).select().single()
+        .then(({ data, error }) => {
+          if (error) { if (before && idx > -1) DATA.purchases[idx] = before; renderAll(); showToast('Gagal simpan. Cuba lagi.', true); }
+          else { const i = DATA.purchases.findIndex(x => x.id === savingId); if (i > -1) DATA.purchases[i] = mapPurchaseFromDb(data); renderAll(); showToast('Disimpan ✓'); }
+        });
+    } else {
+      const tempId = 'tmp' + Date.now();
+      DATA.purchases.push({ id: tempId, ...recordCamel });
+      renderAll(); modalBg.classList.remove('show'); showToast('Menyimpan...');
+      supabaseClient.from('purchases').insert({ user_id: currentUserId, ...record }).select().single()
+        .then(({ data, error }) => {
+          if (error) { DATA.purchases = DATA.purchases.filter(x => x.id !== tempId); renderAll(); showToast('Gagal simpan. Cuba lagi.', true); }
+          else { const i = DATA.purchases.findIndex(x => x.id === tempId); if (i > -1) DATA.purchases[i] = mapPurchaseFromDb(data); renderAll(); showToast('Disimpan ✓'); }
+        });
+    }
+    return;
+  }
+
+  // ---------- DUIT MASUK / DUIT KELUAR ----------
+  const jumlah = parseFloat(document.getElementById('f_jumlah').value);
+  if (!jumlah || jumlah <= 0) { showToast('Sila isi jumlah yang sah.', true); return; }
+  const tarikh = document.getElementById('f_tarikh').value;
+  const catatan = document.getElementById('f_catatan') ? document.getElementById('f_catatan').value : '';
+  const kaedah = document.getElementById('f_kaedah').value;
+  const tempId = 'tmp' + Date.now();
+
+  if (type === 'income') {
+    const sumber = document.getElementById('f_sumber').value;
+    DATA.income.push({ id: tempId, tarikh, sumber, kaedah, jumlah, catatan });
+    renderAll(); modalBg.classList.remove('show'); showToast('Menyimpan...');
+    supabaseClient.from('income').insert({ user_id: currentUserId, tarikh, sumber, kaedah, jumlah, catatan }).select().single()
+      .then(({ data, error }) => {
+        if (error) { DATA.income = DATA.income.filter(x => x.id !== tempId); renderAll(); showToast('Gagal simpan. Cuba lagi.', true); }
+        else { const i = DATA.income.findIndex(x => x.id === tempId); if (i > -1) DATA.income[i] = data; renderAll(); showToast('Disimpan ✓'); }
+      });
+  } else if (type === 'expense') {
+    const item = document.getElementById('f_item').value;
+    DATA.expense.push({ id: tempId, tarikh, item, kaedah, jumlah, catatan });
+    renderAll(); modalBg.classList.remove('show'); showToast('Menyimpan...');
+    supabaseClient.from('expense').insert({ user_id: currentUserId, tarikh, item, kaedah, jumlah, catatan }).select().single()
+      .then(({ data, error }) => {
+        if (error) { DATA.expense = DATA.expense.filter(x => x.id !== tempId); renderAll(); showToast('Gagal simpan. Cuba lagi.', true); }
+        else { const i = DATA.expense.findIndex(x => x.id === tempId); if (i > -1) DATA.expense[i] = data; renderAll(); showToast('Disimpan ✓'); }
+      });
   }
 });
+
 
 // ---------- Carian / Laporan / Backup ----------
 document.getElementById('searchBox').addEventListener('input', renderSearch);
