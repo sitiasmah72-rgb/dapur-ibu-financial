@@ -199,6 +199,7 @@ main { padding: 0 16px 16px; max-width: 480px; margin: 0 auto; }
   <main>
     <!-- DASHBOARD -->
     <section class="page active" id="page-dashboard">
+      <div class="notice" id="onboardNotice" style="display:none;"></div>
       <div class="grid">
         <div class="card">
           <div class="card-title">Masuk · Cash</div>
@@ -262,7 +263,7 @@ main { padding: 0 16px 16px; max-width: 480px; margin: 0 auto; }
     <!-- GAJI -->
     <section class="page" id="page-gaji">
       <div class="section-title">👥 Gaji Pekerja</div>
-      <div class="notice ref">📌 Ini rekod ringkas untuk kira Hutang automatik. Nak kira gaji penuh (OT, EPF, SOCSO, cuti)? Pergi ke "Lagi → Kalkulator Gaji Penuh".</div>
+      <div class="notice ref">📌 Bila sampai tarikh, gaji automatik jadi rekod Duit Keluar sebenar. Kalau baki tak cukup, automatik jadi Hutang. Nak kira gaji penuh (OT, EPF, SOCSO, cuti)? Pergi ke "Lagi → Kalkulator Gaji Penuh".</div>
       <div id="payrollList"></div>
     </section>
 
@@ -298,7 +299,7 @@ main { padding: 0 16px 16px; max-width: 480px; margin: 0 auto; }
     <!-- HUTANG -->
     <section class="page" id="page-hutang">
       <div class="section-title">📉 Hutang</div>
-      <div class="notice ref">📌 Hutang lain (pinjaman/bekalan). Hutang dari kekurangan gaji dikira automatik di Akaun.</div>
+      <div class="notice ref">📌 Pinjaman (jenis "Pinjaman") automatik direkod di Duit Masuk. Bayaran balik automatik direkod di Duit Keluar.</div>
       <div id="debtList"></div>
     </section>
 
@@ -366,8 +367,9 @@ main { padding: 0 16px 16px; max-width: 480px; margin: 0 auto; }
   </div>
 </div>
 
-<script>// ============================================================
-// KONFIGURASI SUPABASE — Ibu isi anon key di bawah
+<script>
+// ============================================================
+// KONFIGURASI SUPABASE
 // ============================================================
 const SUPABASE_URL = 'https://zqvqlqndsqnybhrcniso.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_bkgAZuE3-0FQhjBVSuOBRg_524BbXG8';
@@ -469,12 +471,13 @@ function mapPurchaseFromDb(r) {
     hargaUnit: Number(r.harga_unit) || 0, kuantitiKarton: Number(r.kuantiti_karton) || 0, hargaKarton: Number(r.harga_karton) || 0 };
 }
 function mapPayrollFromDb(r) {
-  return { id: r.id, nama: r.nama, jumlah: Number(r.jumlah), kaedah: r.kaedah, tarikhBayar: r.tarikh_bayar };
+  return { id: r.id, nama: r.nama, jumlah: Number(r.jumlah), kaedah: r.kaedah, tarikhBayar: r.tarikh_bayar, processed: !!r.processed };
 }
 function mapDebtFromDb(r) {
   return { id: r.id, pemiutang: r.pemiutang, jumlah: Number(r.jumlah), baki: Number(r.baki),
     bayaranBulanan: Number(r.bayaran_bulanan) || 0, tarikhAkhir: r.tarikh_akhir, status: r.status,
-    jenis: r.jenis || 'lain', kaedah: r.kaedah || null, catatan: r.catatan || '' };
+    jenis: r.jenis || 'lain', kaedah: r.kaedah || null, catatan: r.catatan || '',
+    tarikh: r.tarikh || null, linkedIncomeId: r.linked_income_id || null };
 }
 
 // ============================================================
@@ -497,8 +500,33 @@ async function loadData() {
   DATA.debts = (debtsRes.data || []).map(mapDebtFromDb);
   DATA.startingCash = settingsRes.data ? Number(settingsRes.data.starting_cash) : 0;
   DATA.startingBank = settingsRes.data ? Number(settingsRes.data.starting_bank) : 0;
+  DATA._hasSettingsRow = !!settingsRes.data;
 
+  await prosesGajiTertunggak();
   renderAll();
+}
+
+// ---------- Auto: gaji yang dah sampai tarikh -> jadi Duit Keluar sebenar ----------
+async function prosesGajiTertunggak() {
+  const today = todayStr();
+  const dueBelumProses = DATA.payroll.filter(p => p.tarikhBayar <= today && !p.processed);
+  for (const p of dueBelumProses) {
+    const kaedahExpense = p.kaedah === 'Transfer' ? 'Transfer' : 'Cash';
+    try {
+      const { data: expRow, error: expErr } = await supabaseClient.from('expense').insert({
+        user_id: currentUserId, tarikh: p.tarikhBayar, item: 'Gaji: ' + p.nama,
+        kaedah: kaedahExpense, jumlah: p.jumlah, catatan: 'Auto-rekod dari Gaji Pekerja'
+      }).select().single();
+      if (expErr) throw expErr;
+      DATA.expense.push(expRow);
+
+      const { error: payErr } = await supabaseClient.from('payroll').update({ processed: true }).eq('id', p.id);
+      if (payErr) throw payErr;
+      p.processed = true;
+    } catch (e) {
+      console.error('Gagal proses gaji tertunggak untuk ' + p.nama, e);
+    }
+  }
 }
 
 function fmt(n) {
@@ -520,8 +548,6 @@ function renderAll() {
 
 // ---------- Akaun (Cash / Bank / Hutang) ----------
 function computeAccounts() {
-  const today = todayStr();
-
   const cashIncome = DATA.income.filter(x => x.kaedah === 'Cash').reduce((s,x)=>s+Number(x.jumlah),0);
   const bankIncome = DATA.income.filter(x => x.kaedah !== 'Cash').reduce((s,x)=>s+Number(x.jumlah),0);
 
@@ -532,16 +558,8 @@ function computeAccounts() {
   let cash = Number(DATA.startingCash) + cashIncome;
   let bank = Number(DATA.startingBank) + bankIncome;
 
-  // ---- Duit dari Pinjaman (Hutang jenis "pinjaman") turut masuk Cash/Bank ----
-  // Baki hutang semasa = jumlah duit pinjaman yang masih "ada kesan" dalam akaun
-  // (bila Ibu bayar balik, baki berkurang, secara automatik kurangkan sumbangan ni)
-  const pinjamanCash = DATA.debts.filter(d => d.jenis === 'pinjaman' && d.kaedah === 'Cash').reduce((s,d)=>s+Number(d.baki),0);
-  const pinjamanBank = DATA.debts.filter(d => d.jenis === 'pinjaman' && d.kaedah === 'Bank').reduce((s,d)=>s+Number(d.baki),0);
-  cash += pinjamanCash;
-  bank += pinjamanBank;
-
   let hutangBelanja = 0;
-  const belanjaTakCukup = []; // senarai belanja yang menyebabkan kekurangan
+  const belanjaTakCukup = []; // senarai belanja yang menyebabkan kekurangan (termasuk gaji, sebab dah jadi expense sebenar)
 
   cashExpensesSorted.forEach(x => {
     cash -= Number(x.jumlah);
@@ -555,46 +573,49 @@ function computeAccounts() {
   const cashExpense = cashExpensesSorted.reduce((s,x)=>s+Number(x.jumlah),0);
   const bankExpense = bankExpensesSorted.reduce((s,x)=>s+Number(x.jumlah),0);
 
-  const duePayroll = DATA.payroll.filter(x => x.tarikhBayar <= today);
-  const upcomingPayroll = DATA.payroll.filter(x => x.tarikhBayar > today);
-
-  const duePayrollCash = duePayroll.filter(x => x.kaedah === 'Cash').reduce((s,x)=>s+Number(x.jumlah),0);
-  const duePayrollBank = duePayroll.filter(x => x.kaedah === 'Transfer').reduce((s,x)=>s+Number(x.jumlah),0);
-
-  let hutangGaji = 0;
-  cash -= duePayrollCash;
-  if (cash < 0) { hutangGaji += -cash; cash = 0; }
-  bank -= duePayrollBank;
-  if (bank < 0) { hutangGaji += -bank; bank = 0; }
+  const today = todayStr();
+  const upcomingPayroll = DATA.payroll.filter(x => x.tarikhBayar > today && !x.processed);
+  const totalPayrollUpcoming = upcomingPayroll.reduce((s,x)=>s+Number(x.jumlah),0);
+  const totalPayrollDue = DATA.payroll.filter(x => x.processed).reduce((s,x)=>s+Number(x.jumlah),0);
 
   const hutangLain = DATA.debts.filter(d => d.status !== 'selesai').reduce((s,d)=>s+Number(d.baki),0);
-  const hutang = hutangGaji + hutangBelanja + hutangLain;
+  const hutang = hutangBelanja + hutangLain;
 
   const totalIncome = cashIncome + bankIncome;
   const totalExpense = cashExpense + bankExpense;
-  const totalPayrollDue = duePayrollCash + duePayrollBank;
-  const totalPayrollUpcoming = upcomingPayroll.reduce((s,x)=>s+Number(x.jumlah),0);
 
-  return { cash, bank, hutang, hutangGaji, hutangBelanja, hutangLain, belanjaTakCukup, cashIncome, bankIncome, totalIncome, totalExpense, totalPayrollDue, totalPayrollUpcoming };
+  return { cash, bank, hutang, hutangBelanja, hutangLain, belanjaTakCukup, cashIncome, bankIncome, totalIncome, totalExpense, totalPayrollDue, totalPayrollUpcoming };
 }
 
 function renderAccounts() {
-  const { cash, bank, hutang, hutangGaji, hutangBelanja, hutangLain, belanjaTakCukup, totalPayrollUpcoming } = computeAccounts();
+  const { cash, bank, hutang, hutangBelanja, hutangLain, belanjaTakCukup, totalPayrollUpcoming } = computeAccounts();
   document.getElementById('accCash').textContent = fmt(cash);
   document.getElementById('accBank').textContent = fmt(bank);
   document.getElementById('accHutang').textContent = fmt(hutang);
   const note = document.getElementById('hutangNote');
   let msgs = [];
   if (hutangBelanja > 0) {
-    msgs.push('🧾 Hutang RM ' + hutangBelanja.toFixed(2) + ' terjana sebab perbelanjaan (Duit Keluar) melebihi baki Cash/Bank.');
+    msgs.push('🧾 Hutang RM ' + hutangBelanja.toFixed(2) + ' terjana sebab perbelanjaan (termasuk gaji) melebihi baki Cash/Bank.');
     const senarai = belanjaTakCukup.slice(-3).map(x => `${x.item || 'Belanja'} (${x.tarikh}, ${x.kaedah})`).join('; ');
     if (senarai) msgs.push('&nbsp;&nbsp;↳ Punca kemungkinan: ' + senarai);
   }
-  if (hutangGaji > 0) msgs.push('⚠️ Hutang RM ' + hutangGaji.toFixed(2) + ' terjana sebab Cash/Bank tak cukup untuk tampung gaji yang dah sampai tarikh.');
   if (hutangLain > 0) msgs.push('📉 Hutang lain (pinjaman/bekalan): RM ' + hutangLain.toFixed(2) + ' — lihat halaman Hutang untuk butiran.');
   if (totalPayrollUpcoming > 0) msgs.push('🗓️ RM ' + totalPayrollUpcoming.toFixed(2) + ' gaji akan datang (belum sampai tarikh) — belum ditolak dari akaun lagi.');
   if (msgs.length) { note.style.display = 'block'; note.innerHTML = msgs.join('<br>'); }
   else { note.style.display = 'none'; }
+
+  // Onboarding — Ibu baru pertama kali guna (tiada baki, tiada rekod langsung)
+  const onboard = document.getElementById('onboardNotice');
+  const takdeApaApa = DATA.income.length === 0 && DATA.expense.length === 0 && DATA.debts.length === 0 &&
+    DATA.startingCash === 0 && DATA.startingBank === 0;
+  if (onboard) {
+    if (takdeApaApa) {
+      onboard.style.display = 'block';
+      onboard.innerHTML = '👋 Kali pertama guna apps ni? Pergi ke <b>Lagi → Akaun → Edit Baki</b> untuk masukkan duit permulaan (Cash &amp; Bank) yang Ibu ada sekarang.';
+    } else {
+      onboard.style.display = 'none';
+    }
+  }
 }
 
 function renderDashboard() {
@@ -604,11 +625,10 @@ function renderDashboard() {
   const todayCashIncome = DATA.income.filter(x => x.tarikh === today && x.kaedah === 'Cash').reduce((s,x)=>s+Number(x.jumlah),0);
   const todayBankIncome = DATA.income.filter(x => x.tarikh === today && x.kaedah !== 'Cash').reduce((s,x)=>s+Number(x.jumlah),0);
   const todayExpenseTotal = DATA.expense.filter(x => x.tarikh === today).reduce((s,x)=>s+Number(x.jumlah),0);
-  const todayPayroll = DATA.payroll.filter(x => x.tarikhBayar === today).reduce((s,x)=>s+Number(x.jumlah),0);
 
   document.getElementById('sumIncomeCash').textContent = fmt(todayCashIncome);
   document.getElementById('sumIncomeBank').textContent = fmt(todayBankIncome);
-  document.getElementById('sumExpense').textContent = fmt(todayExpenseTotal + todayPayroll);
+  document.getElementById('sumExpense').textContent = fmt(todayExpenseTotal);
   document.getElementById('sumBalance').textContent = fmt(cash + bank);
   document.getElementById('sumHutang').textContent = fmt(hutang);
   const idTime = (id) => { const m = String(id).match(/\d+/); return m ? parseInt(m[0]) : 0; };
@@ -616,7 +636,6 @@ function renderDashboard() {
   const all = [
     ...DATA.income.filter(x => x.tarikh === today).map(x => ({...x, jenis:'masuk', label: '💰 ' + (x.sumber || 'Jualan') + ' · ' + (x.kaedah || 'Cash')})),
     ...DATA.expense.filter(x => x.tarikh === today).map(x => ({...x, jenis:'keluar', label: '🧾 ' + (x.item || '-') + ' · ' + (x.kaedah || 'Cash')})),
-    ...DATA.payroll.filter(x => x.tarikhBayar === today).map(x => ({...x, jenis:'keluar', label: '👥 Gaji ' + x.nama + ' · ' + (x.kaedah || 'Cash'), tarikh: x.tarikhBayar})),
   ].sort((a,b) => idTime(b.id) - idTime(a.id));
 
   const el = document.getElementById('recentList');
@@ -710,14 +729,12 @@ function renderPurchases() {
 
 function renderPayroll() {
   const el = document.getElementById('payrollList');
-  const today = todayStr();
   el.innerHTML = DATA.payroll.length === 0 ? '<div class="empty">Belum ada rekod gaji.</div>' :
     [...DATA.payroll].sort((a,b)=>new Date(a.tarikhBayar)-new Date(b.tarikhBayar)).map(p => {
-      const isDue = p.tarikhBayar <= today;
       return `
       <div class="list-item">
         <div class="info">
-          <div class="t1">${p.nama} <span class="tag ${isDue?'':'warn'}">${isDue ? 'Ditolak dari Akaun' : 'Akan Datang'}</span></div>
+          <div class="t1">${p.nama} <span class="tag ${p.processed?'':'warn'}">${p.processed ? 'Ditolak dari Akaun' : 'Akan Datang'}</span></div>
           <div class="t2">Perlu dibayar: ${p.tarikhBayar} · ${p.kaedah || 'Cash'}</div>
         </div>
         <div class="amt" style="color:var(--negative)">${fmt(p.jumlah)}</div>
@@ -750,6 +767,7 @@ function renderDebts() {
         <div><div class="lbl">Tarikh Akhir</div><div class="val">${d.tarikhAkhir || '-'}</div></div>
       </div>
       ${d.catatan ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-top:8px;">📝 ${d.catatan}</div>` : ''}
+      ${d.jenis === 'pinjaman' ? `<div style="font-size:0.75rem; color:var(--positive); margin-top:6px;">✓ Direkod di Duit Masuk (${d.tarikh||'-'})</div>` : ''}
     </div>`).join('');
 }
 
@@ -766,10 +784,20 @@ function bayarHutang(id) {
   const newStatus = newBaki === 0 ? 'selesai' : d.status;
   d.baki = newBaki; d.status = newStatus;
   renderAll(); showToast('Menyimpan...');
+
+  const kaedahExpense = d.kaedah === 'Bank' ? 'Transfer' : (d.kaedah || 'Cash');
+
   supabaseClient.from('debts').update({ baki: newBaki, status: newStatus }).eq('id', id)
-    .then(({ error }) => {
-      if (error) { d.baki = oldBaki; d.status = oldStatus; renderAll(); showToast('Gagal simpan. Cuba lagi.', true); }
-      else { showToast('Disimpan ✓'); }
+    .then(async ({ error }) => {
+      if (error) { d.baki = oldBaki; d.status = oldStatus; renderAll(); showToast('Gagal simpan. Cuba lagi.', true); return; }
+      // Rekod bayaran ni sebagai Duit Keluar sebenar
+      const { data: expRow, error: expErr } = await supabaseClient.from('expense').insert({
+        user_id: currentUserId, tarikh: todayStr(), item: 'Bayar Hutang: ' + d.pemiutang,
+        kaedah: kaedahExpense, jumlah: amt, catatan: 'Auto-rekod bayaran hutang'
+      }).select().single();
+      if (!expErr && expRow) DATA.expense.push(expRow);
+      renderAll();
+      showToast('Disimpan ✓ (turut direkod di Duit Keluar)');
     });
 }
 
@@ -782,7 +810,7 @@ function renderLaporan() {
 
   const masuk = DATA.income.filter(x => inMonth(x.tarikh));
   const keluar = DATA.expense.filter(x => inMonth(x.tarikh));
-  const gaji = DATA.payroll.filter(x => inMonth(x.tarikhBayar));
+  const gaji = DATA.payroll.filter(x => x.processed && inMonth(x.tarikhBayar));
 
   const totalMasuk = masuk.reduce((s,x)=>s+Number(x.jumlah),0);
   const totalKeluar = keluar.reduce((s,x)=>s+Number(x.jumlah),0);
@@ -792,7 +820,7 @@ function renderLaporan() {
   document.getElementById('lapKeluar').textContent = fmt(totalKeluar);
   document.getElementById('lapGaji').textContent = fmt(totalGaji);
   const bersihEl = document.getElementById('lapBersih');
-  const bersih = totalMasuk - totalKeluar - totalGaji;
+  const bersih = totalMasuk - totalKeluar;
   bersihEl.textContent = fmt(bersih);
   bersihEl.className = 'card-value num ' + (bersih >= 0 ? 'positive' : 'negative');
 
@@ -800,7 +828,6 @@ function renderLaporan() {
   const all = [
     ...masuk.map(x=>({...x, jenis:'masuk', label:'💰 '+(x.sumber||'Jualan')+' · '+(x.kaedah||'Cash')})),
     ...keluar.map(x=>({...x, jenis:'keluar', label:'🧾 '+(x.item||'-')+' · '+(x.kaedah||'Cash')})),
-    ...gaji.map(x=>({...x, jenis:'keluar', label:'👥 Gaji '+x.nama, tarikh:x.tarikhBayar})),
   ].sort((a,b)=>{ const d=new Date(b.tarikh)-new Date(a.tarikh); return d!==0?d:idTime(b.id)-idTime(a.id); });
 
   const lapList = document.getElementById('lapList');
@@ -967,37 +994,46 @@ function openModal(type) {
       <div class="field"><label>Kaedah Bayaran</label>
         <select id="f_kaedah"><option>Cash</option><option>Transfer</option></select>
       </div>
-      <div class="field"><label>Tarikh Perlu Dibayar</label><input type="date" id="f_tarikhbayar" value="${todayStr()}"></div>`;
+      <div class="field"><label>Tarikh Perlu Dibayar</label><input type="date" id="f_tarikhbayar" value="${todayStr()}"></div>
+      <div class="field"><label style="font-size:0.72rem; color:var(--text-muted); font-weight:400;">📌 Kalau tarikh ni hari ini/sudah lepas, ia terus jadi Duit Keluar. Kalau tarikh depan, ia tunggu dulu.</label></div>`;
   } else if (type === 'saldo') {
     modalTitle.textContent = '🏦 Edit Baki Bermula';
     modalFields.innerHTML = `
       <div class="field"><label>Cash Bermula (RM)</label><input type="number" id="f_cash" step="0.01" value="${DATA.startingCash}"></div>
-      <div class="field"><label>Bank Bermula (RM)</label><input type="number" id="f_bank" step="0.01" value="${DATA.startingBank}"></div>`;
+      <div class="field"><label>Bank Bermula (RM)</label><input type="number" id="f_bank" step="0.01" value="${DATA.startingBank}"></div>
+      <div class="field"><label style="font-size:0.72rem; color:var(--text-muted); font-weight:400;">📌 Isi ini SEKALI sahaja bila mula guna apps — jumlah duit Cash &amp; Bank yang Ibu ada sekarang.</label></div>`;
   } else if (type === 'debt') {
     const d = editingDebtId ? DATA.debts.find(x => x.id === editingDebtId) : null;
     modalTitle.textContent = editingDebtId ? '✎ Edit Hutang' : '📉 Tambah Hutang';
     modalFields.innerHTML = `
       <div class="field"><label>Sumber / Nama Pemiutang</label><input type="text" id="f_pemiutang" placeholder="cth: Bank ABC / Kak Long / Pembekal" value="${d ? d.pemiutang : ''}"></div>
-      <div class="field"><label>Jumlah (RM)</label><input type="number" id="f_jumlahhutang" step="0.01" value="${d ? d.jumlah : ''}"></div>
+      <div class="field"><label>Jumlah (RM)</label><input type="number" id="f_jumlahhutang" step="0.01" value="${d ? d.jumlah : ''}" ${editingDebtId ? 'readonly style="background:#f5f5f5;"' : ''}></div>
+      ${editingDebtId ? '<div class="field"><label style="font-size:0.72rem; color:var(--text-muted); font-weight:400;">📌 Jumlah asal tak boleh diubah (sebab dah direkod di Duit Masuk). Guna butang 💵 Bayar untuk kurangkan baki.</label></div>' : ''}
       <div class="field"><label>Jenis Hutang</label>
-        <select id="f_jenishutang">
+        <select id="f_jenishutang" ${editingDebtId ? 'disabled' : ''}>
           <option value="pinjaman" ${d && d.jenis==='pinjaman' ? 'selected':''}>Pinjaman (duit terus masuk Cash/Bank)</option>
           <option value="lain" ${d && d.jenis==='lain' ? 'selected':''}>Hutang Lain (bekalan/kredit, tiada duit masuk)</option>
         </select>
       </div>
       <div class="field" id="fieldKaedahPinjaman"><label>Duit Masuk Ke</label>
-        <select id="f_kaedahpinjaman">
+        <select id="f_kaedahpinjaman" ${editingDebtId ? 'disabled' : ''}>
           <option value="Cash" ${d && d.kaedah==='Cash' ? 'selected':''}>Cash</option>
           <option value="Bank" ${d && d.kaedah==='Bank' ? 'selected':''}>Bank</option>
         </select>
       </div>
+      <div class="field" id="fieldTarikhPinjaman"><label>Tarikh Terima Duit</label><input type="date" id="f_tarikhpinjaman" value="${d && d.tarikh ? d.tarikh : todayStr()}" ${editingDebtId ? 'readonly style="background:#f5f5f5;"' : ''}></div>
       <div class="field"><label>Catatan</label><input type="text" id="f_catatanhutang" placeholder="pilihan, cth: untuk beli oven" value="${d ? (d.catatan||'') : ''}"></div>
       <div class="field"><label>Bayaran Bulanan (RM)</label><input type="number" id="f_bayaranbulanan" step="0.01" placeholder="pilihan" value="${d ? (d.bayaranBulanan||'') : ''}"></div>
       <div class="field"><label>Tarikh Akhir</label><input type="date" id="f_tarikhakhir" value="${d ? (d.tarikhAkhir||'') : ''}"></div>`;
     setTimeout(() => {
       const jenisSel = document.getElementById('f_jenishutang');
       const kaedahField = document.getElementById('fieldKaedahPinjaman');
-      const toggle = () => kaedahField.style.display = jenisSel.value === 'pinjaman' ? 'block' : 'none';
+      const tarikhField = document.getElementById('fieldTarikhPinjaman');
+      const toggle = () => {
+        const show = jenisSel.value === 'pinjaman';
+        kaedahField.style.display = show ? 'block' : 'none';
+        tarikhField.style.display = show ? 'block' : 'none';
+      };
       jenisSel.addEventListener('change', toggle);
       toggle();
     }, 0);
@@ -1035,36 +1071,63 @@ document.getElementById('modalSave').addEventListener('click', () => {
     if (!pemiutang || !jumlah || jumlah <= 0) { showToast('Sila isi nama & jumlah yang sah.', true); return; }
     const bayaranBulanan = parseFloat(document.getElementById('f_bayaranbulanan').value) || 0;
     const tarikhAkhir = document.getElementById('f_tarikhakhir').value || null;
-    const jenis = document.getElementById('f_jenishutang').value;
-    const kaedah = jenis === 'pinjaman' ? document.getElementById('f_kaedahpinjaman').value : null;
     const catatan = document.getElementById('f_catatanhutang').value;
 
     if (editingDebtId) {
+      // Edit: hanya catatan, bayaran bulanan, tarikh akhir boleh ubah (jumlah/jenis dikunci)
       const idx = DATA.debts.findIndex(x => x.id === editingDebtId);
       const before = idx > -1 ? { ...DATA.debts[idx] } : null;
-      if (idx > -1) DATA.debts[idx] = { ...DATA.debts[idx], pemiutang, jumlah, bayaranBulanan, tarikhAkhir, jenis, kaedah, catatan };
+      if (idx > -1) DATA.debts[idx] = { ...DATA.debts[idx], pemiutang, bayaranBulanan, tarikhAkhir, catatan };
       const savingId = editingDebtId;
       editingDebtId = null;
       renderAll(); modalBg.classList.remove('show'); showToast('Menyimpan...');
       supabaseClient.from('debts')
-        .update({ pemiutang, jumlah, bayaran_bulanan: bayaranBulanan, tarikh_akhir: tarikhAkhir, jenis, kaedah, catatan })
+        .update({ pemiutang, bayaran_bulanan: bayaranBulanan, tarikh_akhir: tarikhAkhir, catatan })
         .eq('id', savingId).select().single()
         .then(({ data, error }) => {
           if (error) { if (before && idx > -1) DATA.debts[idx] = before; renderAll(); showToast('Gagal simpan hutang. Cuba lagi.', true); }
           else { const i = DATA.debts.findIndex(x => x.id === savingId); if (i > -1) DATA.debts[i] = mapDebtFromDb(data); renderAll(); showToast('Disimpan ✓'); }
         });
-    } else {
-      const tempId = 'tmp' + Date.now();
-      DATA.debts.push({ id: tempId, pemiutang, jumlah, baki: jumlah, bayaranBulanan, tarikhAkhir, status: 'aktif', jenis, kaedah, catatan });
-      renderAll(); modalBg.classList.remove('show'); showToast('Menyimpan...');
-      supabaseClient.from('debts')
-        .insert({ user_id: currentUserId, pemiutang, jumlah, baki: jumlah, bayaran_bulanan: bayaranBulanan, tarikh_akhir: tarikhAkhir, status: 'aktif', jenis, kaedah, catatan })
-        .select().single()
-        .then(({ data, error }) => {
-          if (error) { DATA.debts = DATA.debts.filter(x => x.id !== tempId); renderAll(); showToast('Gagal simpan hutang. Cuba lagi.', true); }
-          else { const i = DATA.debts.findIndex(x => x.id === tempId); if (i > -1) DATA.debts[i] = mapDebtFromDb(data); renderAll(); showToast('Disimpan ✓'); }
-        });
+      return;
     }
+
+    // Tambah baru
+    const jenis = document.getElementById('f_jenishutang').value;
+    const kaedah = jenis === 'pinjaman' ? document.getElementById('f_kaedahpinjaman').value : null;
+    const tarikhPinjaman = jenis === 'pinjaman' ? document.getElementById('f_tarikhpinjaman').value : null;
+
+    (async () => {
+      showToast('Menyimpan...');
+      try {
+        let linkedIncomeId = null;
+
+        // Kalau jenis pinjaman, rekod dulu ke Duit Masuk
+        if (jenis === 'pinjaman') {
+          const kaedahIncome = kaedah === 'Bank' ? 'Transfer' : 'Cash';
+          const { data: incRow, error: incErr } = await supabaseClient.from('income').insert({
+            user_id: currentUserId, tarikh: tarikhPinjaman, sumber: 'Pinjaman - ' + pemiutang,
+            kaedah: kaedahIncome, jumlah, catatan: 'Auto-rekod dari Hutang Pinjaman'
+          }).select().single();
+          if (incErr) throw incErr;
+          DATA.income.push(incRow);
+          linkedIncomeId = incRow.id;
+        }
+
+        const { data: debtRow, error: debtErr } = await supabaseClient.from('debts').insert({
+          user_id: currentUserId, pemiutang, jumlah, baki: jumlah, bayaran_bulanan: bayaranBulanan,
+          tarikh_akhir: tarikhAkhir, status: 'aktif', jenis, kaedah, catatan,
+          tarikh: tarikhPinjaman, linked_income_id: linkedIncomeId
+        }).select().single();
+        if (debtErr) throw debtErr;
+        DATA.debts.push(mapDebtFromDb(debtRow));
+
+        renderAll(); modalBg.classList.remove('show');
+        showToast(jenis === 'pinjaman' ? 'Disimpan ✓ (turut direkod di Duit Masuk)' : 'Disimpan ✓');
+      } catch (e) {
+        showToast('Gagal simpan hutang. Cuba lagi.', true);
+        console.error(e);
+      }
+    })();
     return;
   }
 
@@ -1076,14 +1139,17 @@ document.getElementById('modalSave').addEventListener('click', () => {
     const kaedah = document.getElementById('f_kaedah').value;
     const tarikhBayar = document.getElementById('f_tarikhbayar').value;
     const tempId = 'tmp' + Date.now();
-    DATA.payroll.push({ id: tempId, nama, jumlah, kaedah, tarikhBayar });
+    DATA.payroll.push({ id: tempId, nama, jumlah, kaedah, tarikhBayar, processed: false });
     renderAll(); modalBg.classList.remove('show'); showToast('Menyimpan...');
     supabaseClient.from('payroll')
       .insert({ user_id: currentUserId, nama, jumlah, kaedah, tarikh_bayar: tarikhBayar })
       .select().single()
-      .then(({ data, error }) => {
-        if (error) { DATA.payroll = DATA.payroll.filter(x => x.id !== tempId); renderAll(); showToast('Gagal simpan gaji. Cuba lagi.', true); }
-        else { const i = DATA.payroll.findIndex(x => x.id === tempId); if (i > -1) DATA.payroll[i] = mapPayrollFromDb(data); renderAll(); showToast('Disimpan ✓'); }
+      .then(async ({ data, error }) => {
+        if (error) { DATA.payroll = DATA.payroll.filter(x => x.id !== tempId); renderAll(); showToast('Gagal simpan gaji. Cuba lagi.', true); return; }
+        const i = DATA.payroll.findIndex(x => x.id === tempId);
+        if (i > -1) DATA.payroll[i] = mapPayrollFromDb(data);
+        await prosesGajiTertunggak();
+        renderAll(); showToast('Disimpan ✓');
       });
     return;
   }
