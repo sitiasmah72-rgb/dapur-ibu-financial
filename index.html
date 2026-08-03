@@ -511,18 +511,21 @@ async function prosesGajiTertunggak() {
   const today = todayStr();
   const dueBelumProses = DATA.payroll.filter(p => p.tarikhBayar <= today && !p.processed);
   for (const p of dueBelumProses) {
-    const kaedahExpense = p.kaedah === 'Transfer' ? 'Transfer' : 'Cash';
     try {
+      // "Tuntut" rekod ni dulu (hanya berjaya kalau processed MASIH false) — elak proses berulang/serentak
+      const { data: claimed, error: claimErr } = await supabaseClient.from('payroll')
+        .update({ processed: true }).eq('id', p.id).eq('processed', false).select().maybeSingle();
+      if (claimErr) throw claimErr;
+      if (!claimed) { p.processed = true; continue; } // dah diproses oleh panggilan lain sebelum ni — skip, jangan cipta duit keluar lagi
+
+      p.processed = true;
+      const kaedahExpense = p.kaedah === 'Transfer' ? 'Transfer' : 'Cash';
       const { data: expRow, error: expErr } = await supabaseClient.from('expense').insert({
         user_id: currentUserId, tarikh: p.tarikhBayar, item: 'Gaji: ' + p.nama,
         kaedah: kaedahExpense, jumlah: p.jumlah, catatan: 'Auto-rekod dari Gaji Pekerja'
       }).select().single();
       if (expErr) throw expErr;
       DATA.expense.push(expRow);
-
-      const { error: payErr } = await supabaseClient.from('payroll').update({ processed: true }).eq('id', p.id);
-      if (payErr) throw payErr;
-      p.processed = true;
     } catch (e) {
       console.error('Gagal proses gaji tertunggak untuk ' + p.nama, e);
     }
