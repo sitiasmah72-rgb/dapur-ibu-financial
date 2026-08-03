@@ -1264,6 +1264,7 @@ function tukarTab(id,btn){
   kira();
   kiraCuti();
   if (id === "sejarah") renderSejarah();
+  if (id === "pekerja") renderPekerjaList();
 }
 
 function doPrint(){
@@ -1415,6 +1416,12 @@ async function simpanPekerja() {
     msg.textContent = "Sila masukkan nama pekerja.";
     return;
   }
+  if (supaGaji && !supaUserId) {
+    try {
+      const { data: sess } = await supaGaji.auth.getSession();
+      if (sess && sess.session) supaUserId = sess.session.user.id;
+    } catch (e) { /* abaikan */ }
+  }
   if (!supaGaji || !supaUserId) {
     msg.style.color = "#c8920a";
     msg.textContent = "⚠️ Belum sambung cloud. Sila buka apps ni melalui link sebenar (bukan fail tempatan) dan log masuk dahulu.";
@@ -1474,9 +1481,17 @@ async function padamPekerja(id) {
   }
 }
 
-function renderPekerjaList() {
+async function renderPekerjaList() {
   const el = document.getElementById("pekerjaList");
   if (!el) return;
+
+  // Semak semula sesi terkini (bukan bergantung sepenuhnya pada semakan awal masa iframe dimuat)
+  if (supaGaji && !supaUserId) {
+    try {
+      const { data } = await supaGaji.auth.getSession();
+      if (data && data.session) supaUserId = data.session.user.id;
+    } catch (e) { /* abaikan, guna nilai sedia ada */ }
+  }
 
   if (!supaGaji || !supaUserId) {
     el.innerHTML = '<div style="text-align:center;padding:20px;color:#999;font-size:13px;">Belum sambung cloud. Buka apps melalui link sebenar dan log masuk.</div>';
