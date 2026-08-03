@@ -317,11 +317,16 @@ main { padding: 0 16px 16px; max-width: 480px; margin: 0 auto; }
       <div id="lapList"></div>
 
       <div class="section-title" style="font-size:0.85rem;">💾 Backup</div>
-      <div style="display:flex; gap:8px;">
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <button class="btn btn-secondary" id="btnExport">Export JSON</button>
         <button class="btn btn-secondary" id="btnImportTrigger">Import JSON</button>
         <input type="file" id="importFile" accept="application/json" style="display:none;">
       </div>
+
+      <div class="section-title" style="font-size:0.85rem;">🧹 Pembersihan</div>
+      <div class="notice ref">📌 Kalau ada rekod "Gaji: ..." atau "Bayar Hutang: ..." bertindan/berganda di Duit Keluar (sebab pepijat lama), tekan butang ni untuk buang lebihan automatik — akan kekalkan satu je untuk setiap pekerja+tarikh+jumlah.</div>
+      <button class="btn btn-secondary" id="btnCleanupDupes" style="width:100%;">🧹 Bersihkan Rekod Bergända</button>
+      <div id="cleanupMsg" style="font-size:0.8rem; margin-top:8px; color:var(--text-muted);"></div>
     </section>
 
     <!-- CARIAN -->
@@ -1278,6 +1283,47 @@ document.getElementById('importFile').addEventListener('change', (e) => {
   };
   reader.readAsText(file);
   e.target.value = '';
+});
+
+// ---------- Pembersihan rekod bergända (Gaji / Bayar Hutang auto-rekod) ----------
+document.getElementById('btnCleanupDupes').addEventListener('click', async () => {
+  const msg = document.getElementById('cleanupMsg');
+  const btn = document.getElementById('btnCleanupDupes');
+
+  const auto = DATA.expense.filter(x => (x.item || '').startsWith('Gaji: ') || (x.item || '').startsWith('Bayar Hutang: '));
+  const groups = {};
+  auto.forEach(x => {
+    const key = x.item + '|' + x.tarikh + '|' + x.jumlah + '|' + x.kaedah;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(x);
+  });
+
+  const idTime = (id) => { const m = String(id).match(/\d+/); return m ? parseInt(m[0]) : 0; };
+  const toDelete = [];
+  Object.values(groups).forEach(list => {
+    if (list.length > 1) {
+      list.sort((a,b) => idTime(a.id) - idTime(b.id)); // kekalkan yang paling awal
+      toDelete.push(...list.slice(1));
+    }
+  });
+
+  if (toDelete.length === 0) {
+    msg.textContent = '✅ Tiada rekod bergända dijumpai.';
+    return;
+  }
+
+  if (!confirm(`Jumpa ${toDelete.length} rekod bergända (jumlah RM ${toDelete.reduce((s,x)=>s+Number(x.jumlah),0).toFixed(2)}). Padam lebihan ni sekarang?`)) return;
+
+  btn.disabled = true;
+  msg.textContent = 'Membersihkan...';
+  let berjaya = 0;
+  for (const x of toDelete) {
+    const { error } = await supabaseClient.from('expense').delete().eq('id', x.id);
+    if (!error) { DATA.expense = DATA.expense.filter(e => e.id !== x.id); berjaya++; }
+  }
+  btn.disabled = false;
+  msg.textContent = `✅ ${berjaya} daripada ${toDelete.length} rekod bergända berjaya dipadam.`;
+  renderAll();
 });
 </script>
 </body>
