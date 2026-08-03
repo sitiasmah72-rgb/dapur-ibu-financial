@@ -200,6 +200,7 @@ main { padding: 0 16px 16px; max-width: 480px; margin: 0 auto; }
     <!-- DASHBOARD -->
     <section class="page active" id="page-dashboard">
       <div class="notice" id="onboardNotice" style="display:none;"></div>
+      <div class="notice" id="debtReminderNotice" style="display:none; background:var(--negative-bg); color:var(--negative);"></div>
       <div class="grid">
         <div class="card">
           <div class="card-title">Masuk · Cash</div>
@@ -639,6 +640,26 @@ function renderDashboard() {
   document.getElementById('sumExpense').textContent = fmt(todayExpenseTotal);
   document.getElementById('sumBalance').textContent = fmt(cash + bank);
   document.getElementById('sumHutang').textContent = fmt(hutang);
+
+  // ---- Reminder Hutang (ikut Tarikh Akhir) ----
+  const remindNote = document.getElementById('debtReminderNotice');
+  const dueSoonOrLate = DATA.debts.filter(d => d.status !== 'selesai' && d.tarikhAkhir && hariBaki(d.tarikhAkhir) <= 7);
+  if (remindNote) {
+    if (dueSoonOrLate.length > 0) {
+      const items = dueSoonOrLate
+        .sort((a,b) => hariBaki(a.tarikhAkhir) - hariBaki(b.tarikhAkhir))
+        .map(d => {
+          const hb = hariBaki(d.tarikhAkhir);
+          const status = hb < 0 ? `tertunggak ${Math.abs(hb)} hari` : hb === 0 ? 'kena bayar hari ini' : `${hb} hari lagi`;
+          return `${d.pemiutang} (${fmt(d.baki)}) — ${status}`;
+        }).join('<br>');
+      remindNote.style.display = 'block';
+      remindNote.innerHTML = '⏰ <b>Peringatan Hutang:</b><br>' + items;
+    } else {
+      remindNote.style.display = 'none';
+    }
+  }
+
   const idTime = (id) => { const m = String(id).match(/\d+/); return m ? parseInt(m[0]) : 0; };
 
   const all = [
@@ -752,15 +773,41 @@ function renderPayroll() {
 }
 
 // ---------- Hutang ----------
+function hariBaki(tarikhAkhir) {
+  if (!tarikhAkhir) return null;
+  const today = new Date(todayStr());
+  const akhir = new Date(tarikhAkhir);
+  return Math.round((akhir - today) / (1000*60*60*24));
+}
+
+function reminderBadge(d) {
+  if (d.status === 'selesai' || !d.tarikhAkhir) return '';
+  const hb = hariBaki(d.tarikhAkhir);
+  if (hb < 0) return `<span class="tag" style="background:var(--negative-bg); color:var(--negative);">⏰ Tertunggak ${Math.abs(hb)} hari</span>`;
+  if (hb === 0) return `<span class="tag" style="background:var(--negative-bg); color:var(--negative);">⏰ Kena bayar HARI INI</span>`;
+  if (hb <= 7) return `<span class="tag warn">⏰ ${hb} hari lagi</span>`;
+  return '';
+}
+
 function renderDebts() {
   const el = document.getElementById('debtList');
   if (DATA.debts.length === 0) { el.innerHTML = '<div class="empty">Tiada hutang direkod. Tekan + untuk tambah.</div>'; return; }
-  el.innerHTML = [...DATA.debts].map(d => `
+
+  const sorted = [...DATA.debts].sort((a,b) => {
+    if (a.status === 'selesai' && b.status !== 'selesai') return 1;
+    if (a.status !== 'selesai' && b.status === 'selesai') return -1;
+    if (!a.tarikhAkhir) return 1;
+    if (!b.tarikhAkhir) return -1;
+    return new Date(a.tarikhAkhir) - new Date(b.tarikhAkhir);
+  });
+
+  el.innerHTML = sorted.map(d => `
     <div class="ing-card">
       <div class="ing-head">
         <div class="name">${d.pemiutang}
           <span class="tag ${d.status==='selesai'?'':'warn'}">${d.status==='selesai'?'Selesai':'Aktif'}</span>
           ${d.jenis === 'pinjaman' ? `<span class="tag">💵 Pinjaman (${d.kaedah})</span>` : ''}
+          ${reminderBadge(d)}
         </div>
         <div class="actions">
           <button onclick="bayarHutang('${d.id}')">💵</button>
@@ -1132,7 +1179,7 @@ document.getElementById('modalSave').addEventListener('click', () => {
         renderAll(); modalBg.classList.remove('show');
         showToast(jenis === 'pinjaman' ? 'Disimpan ✓ (turut direkod di Duit Masuk)' : 'Disimpan ✓');
       } catch (e) {
-        showToast('Gagal simpan hutang. Cuba lagi.', true);
+        alert('Gagal simpan hutang:\n\n' + (e.message || e.details || JSON.stringify(e)));
         console.error(e);
       }
     })();
