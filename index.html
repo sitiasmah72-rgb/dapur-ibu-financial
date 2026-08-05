@@ -264,8 +264,15 @@ main { padding: 0 16px 16px; max-width: 480px; margin: 0 auto; }
     <!-- GAJI -->
     <section class="page" id="page-gaji">
       <div class="section-title">👥 Gaji Pekerja</div>
-      <div class="notice ref">📌 Bila sampai tarikh, gaji automatik jadi rekod Duit Keluar sebenar. Kalau baki tak cukup, automatik jadi Hutang. Nak kira gaji penuh (OT, EPF, SOCSO, cuti)? Pergi ke "Lagi → Kalkulator Gaji Penuh".</div>
+      <div class="notice ref">📌 Tekan "Tandakan Telah Dibayar" bila Ibu betul-betul dah bayar (boleh pilih tarikh sebenar dibayar). Baru masuk rekod Duit Keluar dan tolak dari Cash/Bank. Kalau baki tak cukup, automatik jadi Hutang. Nak kira gaji penuh (OT, EPF, SOCSO, cuti)? Pergi ke "Lagi → Kalkulator Gaji Penuh".</div>
       <div id="payrollList"></div>
+    </section>
+
+    <!-- KOMITMEN BULAN INI -->
+    <section class="page" id="page-komitmen">
+      <div class="section-title">🗒️ Komitmen Bulan Ini</div>
+      <div class="notice ref">📌 Untuk peringatan bayaran akan datang (sewa, bil, bayaran pembekal, dll) — bukan hutang pada orang. Tekan "Tandakan Telah Dibayar" bila betul-betul dah bayar (boleh pilih tarikh sebenar), baru masuk Duit Keluar & tolak Cash/Bank. Selagi belum ditandakan, baki tak tersentuh.</div>
+      <div id="commitmentList"></div>
     </section>
 
     <!-- KALKULATOR GAJI PENUH (app Gaji sedia ada, dalam skrin) -->
@@ -353,6 +360,7 @@ main { padding: 0 16px 16px; max-width: 480px; margin: 0 auto; }
     <h3>Lagi</h3>
     <button class="more-item" data-page="gaji"><span class="icon">👥</span> Gaji (Ringkas + Hutang)</button>
     <button class="more-item" data-page="kalkulatorgaji"><span class="icon">🧮</span> Kalkulator Gaji Penuh</button>
+    <button class="more-item" data-page="komitmen"><span class="icon">🗒️</span> Komitmen Bulan Ini</button>
     <button class="more-item" data-page="hutang"><span class="icon">📉</span> Hutang</button>
     <button class="more-item" data-page="akaun"><span class="icon">🏦</span> Akaun</button>
     <button class="more-item" data-page="laporan"><span class="icon">📊</span> Laporan &amp; Backup</button>
@@ -381,7 +389,7 @@ const SUPABASE_URL = 'https://zqvqlqndsqnybhrcniso.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_bkgAZuE3-0FQhjBVSuOBRg_524BbXG8';
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-let DATA = { income: [], expense: [], purchases: [], payroll: [], debts: [], startingCash: 0, startingBank: 0 };
+let DATA = { income: [], expense: [], purchases: [], payroll: [], commitments: [], debts: [], startingCash: 0, startingBank: 0 };
 let currentPage = 'dashboard';
 let editingPurchaseId = null;
 let editingDebtId = null;
@@ -477,7 +485,10 @@ function mapPurchaseFromDb(r) {
     hargaUnit: Number(r.harga_unit) || 0, kuantitiKarton: Number(r.kuantiti_karton) || 0, hargaKarton: Number(r.harga_karton) || 0 };
 }
 function mapPayrollFromDb(r) {
-  return { id: r.id, nama: r.nama, jumlah: Number(r.jumlah), kaedah: r.kaedah, tarikhBayar: r.tarikh_bayar, processed: !!r.processed };
+  return { id: r.id, nama: r.nama, jumlah: Number(r.jumlah), kaedah: r.kaedah, tarikhBayar: r.tarikh_bayar, tarikhDibayar: r.tarikh_dibayar || null, processed: !!r.processed };
+}
+function mapCommitmentFromDb(r) {
+  return { id: r.id, perkara: r.perkara, jumlah: Number(r.jumlah), kaedah: r.kaedah, tarikhSasaran: r.tarikh_sasaran, tarikhDibayar: r.tarikh_dibayar || null, processed: !!r.processed };
 }
 function mapDebtFromDb(r) {
   return { id: r.id, pemiutang: r.pemiutang, jumlah: Number(r.jumlah), baki: Number(r.baki),
@@ -490,11 +501,12 @@ function mapDebtFromDb(r) {
 // MUAT DATA DARI SUPABASE
 // ============================================================
 async function loadData() {
-  const [incomeRes, expenseRes, purchasesRes, payrollRes, debtsRes, settingsRes] = await Promise.all([
+  const [incomeRes, expenseRes, purchasesRes, payrollRes, commitmentsRes, debtsRes, settingsRes] = await Promise.all([
     supabaseClient.from('income').select('*').order('tarikh', { ascending: false }),
     supabaseClient.from('expense').select('*').order('tarikh', { ascending: false }),
     supabaseClient.from('purchases').select('*').order('bahan'),
     supabaseClient.from('payroll').select('*').order('tarikh_bayar'),
+    supabaseClient.from('commitments').select('*').order('tarikh_sasaran'),
     supabaseClient.from('debts').select('*'),
     supabaseClient.from('settings').select('*').eq('user_id', currentUserId).maybeSingle(),
   ]);
@@ -503,38 +515,85 @@ async function loadData() {
   DATA.expense = expenseRes.data || [];
   DATA.purchases = (purchasesRes.data || []).map(mapPurchaseFromDb);
   DATA.payroll = (payrollRes.data || []).map(mapPayrollFromDb);
+  DATA.commitments = (commitmentsRes.data || []).map(mapCommitmentFromDb);
   DATA.debts = (debtsRes.data || []).map(mapDebtFromDb);
   DATA.startingCash = settingsRes.data ? Number(settingsRes.data.starting_cash) : 0;
   DATA.startingBank = settingsRes.data ? Number(settingsRes.data.starting_bank) : 0;
   DATA._hasSettingsRow = !!settingsRes.data;
 
-  await prosesGajiTertunggak();
   renderAll();
 }
 
-// ---------- Auto: gaji yang dah sampai tarikh -> jadi Duit Keluar sebenar ----------
-async function prosesGajiTertunggak() {
-  const today = todayStr();
-  const dueBelumProses = DATA.payroll.filter(p => p.tarikhBayar <= today && !p.processed);
-  for (const p of dueBelumProses) {
-    try {
-      // "Tuntut" rekod ni dulu (hanya berjaya kalau processed MASIH false) — elak proses berulang/serentak
-      const { data: claimed, error: claimErr } = await supabaseClient.from('payroll')
-        .update({ processed: true }).eq('id', p.id).eq('processed', false).select().maybeSingle();
-      if (claimErr) throw claimErr;
-      if (!claimed) { p.processed = true; continue; } // dah diproses oleh panggilan lain sebelum ni — skip, jangan cipta duit keluar lagi
+// ---------- Manual: Ibu tandakan gaji "Telah Dibayar" -> baru jadi Duit Keluar sebenar ----------
+async function tandaGajiDibayar(id) {
+  const p = DATA.payroll.find(x => x.id === id);
+  if (!p) return;
+  const dateInput = document.getElementById('tarikhDibayar-' + id);
+  const tarikhDibayar = dateInput ? dateInput.value : todayStr();
+  if (!tarikhDibayar) { showToast('Sila pilih tarikh dibayar.', true); return; }
 
-      p.processed = true;
-      const kaedahExpense = p.kaedah === 'Transfer' ? 'Transfer' : 'Cash';
-      const { data: expRow, error: expErr } = await supabaseClient.from('expense').insert({
-        user_id: currentUserId, tarikh: p.tarikhBayar, item: 'Gaji: ' + p.nama,
-        kaedah: kaedahExpense, jumlah: p.jumlah, catatan: 'Auto-rekod dari Gaji Pekerja'
-      }).select().single();
-      if (expErr) throw expErr;
-      DATA.expense.push(expRow);
-    } catch (e) {
-      console.error('Gagal proses gaji tertunggak untuk ' + p.nama, e);
-    }
+  const oldProcessed = p.processed, oldTarikhDibayar = p.tarikhDibayar;
+  p.processed = true; p.tarikhDibayar = tarikhDibayar;
+  renderAll(); showToast('Menyimpan...');
+
+  try {
+    // "Tuntut" rekod ni dulu (hanya berjaya kalau processed MASIH false) — elak proses berulang/serentak
+    const { data: claimed, error: claimErr } = await supabaseClient.from('payroll')
+      .update({ processed: true, tarikh_dibayar: tarikhDibayar }).eq('id', id).eq('processed', false).select().maybeSingle();
+    if (claimErr) throw claimErr;
+    if (!claimed) { renderAll(); showToast('Rekod ni dah ditandakan dibayar sebelum ni.', true); return; }
+
+    const kaedahExpense = p.kaedah === 'Transfer' ? 'Transfer' : 'Cash';
+    const { data: expRow, error: expErr } = await supabaseClient.from('expense').insert({
+      user_id: currentUserId, tarikh: tarikhDibayar, item: 'Gaji: ' + p.nama,
+      kaedah: kaedahExpense, jumlah: p.jumlah, catatan: 'Auto-rekod dari Gaji Pekerja (ditandakan dibayar)'
+    }).select().single();
+    if (expErr) throw expErr;
+    DATA.expense.push(expRow);
+    renderAll();
+    showToast('Disimpan ✓ (turut direkod di Duit Keluar, ditolak dari ' + kaedahExpense + ')');
+  } catch (e) {
+    p.processed = oldProcessed; p.tarikhDibayar = oldTarikhDibayar;
+    renderAll();
+    const msg = (e && (e.message || e.hint || e.details)) || 'Ralat tidak diketahui';
+    showToast('Gagal: ' + msg, true);
+    console.error('Gagal tandakan gaji dibayar untuk ' + p.nama, e);
+  }
+}
+
+// ---------- Manual: Ibu tandakan komitmen "Telah Dibayar" -> baru jadi Duit Keluar sebenar ----------
+async function tandaKomitmenDibayar(id) {
+  const c = DATA.commitments.find(x => x.id === id);
+  if (!c) return;
+  const dateInput = document.getElementById('komitmenTarikhDibayar-' + id);
+  const tarikhDibayar = dateInput ? dateInput.value : todayStr();
+  if (!tarikhDibayar) { showToast('Sila pilih tarikh dibayar.', true); return; }
+
+  const oldProcessed = c.processed, oldTarikhDibayar = c.tarikhDibayar;
+  c.processed = true; c.tarikhDibayar = tarikhDibayar;
+  renderAll(); showToast('Menyimpan...');
+
+  try {
+    const { data: claimed, error: claimErr } = await supabaseClient.from('commitments')
+      .update({ processed: true, tarikh_dibayar: tarikhDibayar }).eq('id', id).eq('processed', false).select().maybeSingle();
+    if (claimErr) throw claimErr;
+    if (!claimed) { renderAll(); showToast('Rekod ni dah ditandakan dibayar sebelum ni.', true); return; }
+
+    const kaedahExpense = c.kaedah === 'Transfer' ? 'Transfer' : 'Cash';
+    const { data: expRow, error: expErr } = await supabaseClient.from('expense').insert({
+      user_id: currentUserId, tarikh: tarikhDibayar, item: 'Komitmen: ' + c.perkara,
+      kaedah: kaedahExpense, jumlah: c.jumlah, catatan: 'Auto-rekod dari Komitmen Bulan Ini (ditandakan dibayar)'
+    }).select().single();
+    if (expErr) throw expErr;
+    DATA.expense.push(expRow);
+    renderAll();
+    showToast('Disimpan ✓ (turut direkod di Duit Keluar, ditolak dari ' + kaedahExpense + ')');
+  } catch (e) {
+    c.processed = oldProcessed; c.tarikhDibayar = oldTarikhDibayar;
+    renderAll();
+    const msg = (e && (e.message || e.hint || e.details)) || 'Ralat tidak diketahui';
+    showToast('Gagal: ' + msg, true);
+    console.error('Gagal tandakan komitmen dibayar untuk ' + c.perkara, e);
   }
 }
 
@@ -549,6 +608,7 @@ function renderAll() {
   renderExpense();
   renderPurchases();
   renderPayroll();
+  renderCommitments();
   renderDebts();
   renderAccounts();
   renderLaporan();
@@ -583,9 +643,10 @@ function computeAccounts() {
   const bankExpense = bankExpensesSorted.reduce((s,x)=>s+Number(x.jumlah),0);
 
   const today = todayStr();
-  const upcomingPayroll = DATA.payroll.filter(x => x.tarikhBayar > today && !x.processed);
+  const upcomingPayroll = DATA.payroll.filter(x => !x.processed);
   const totalPayrollUpcoming = upcomingPayroll.reduce((s,x)=>s+Number(x.jumlah),0);
   const totalPayrollDue = DATA.payroll.filter(x => x.processed).reduce((s,x)=>s+Number(x.jumlah),0);
+  const totalCommitmentUpcoming = DATA.commitments.filter(x => !x.processed).reduce((s,x)=>s+Number(x.jumlah),0);
 
   const hutangLain = DATA.debts.filter(d => d.status !== 'selesai').reduce((s,d)=>s+Number(d.baki),0);
   const hutang = hutangBelanja + hutangLain;
@@ -593,11 +654,11 @@ function computeAccounts() {
   const totalIncome = cashIncome + bankIncome;
   const totalExpense = cashExpense + bankExpense;
 
-  return { cash, bank, hutang, hutangBelanja, hutangLain, belanjaTakCukup, cashIncome, bankIncome, totalIncome, totalExpense, totalPayrollDue, totalPayrollUpcoming };
+  return { cash, bank, hutang, hutangBelanja, hutangLain, belanjaTakCukup, cashIncome, bankIncome, totalIncome, totalExpense, totalPayrollDue, totalPayrollUpcoming, totalCommitmentUpcoming };
 }
 
 function renderAccounts() {
-  const { cash, bank, hutang, hutangBelanja, hutangLain, belanjaTakCukup, totalPayrollUpcoming } = computeAccounts();
+  const { cash, bank, hutang, hutangBelanja, hutangLain, belanjaTakCukup, totalPayrollUpcoming, totalCommitmentUpcoming } = computeAccounts();
   document.getElementById('accCash').textContent = fmt(cash);
   document.getElementById('accBank').textContent = fmt(bank);
   document.getElementById('accHutang').textContent = fmt(hutang);
@@ -609,7 +670,8 @@ function renderAccounts() {
     if (senarai) msgs.push('&nbsp;&nbsp;↳ Punca kemungkinan: ' + senarai);
   }
   if (hutangLain > 0) msgs.push('📉 Hutang lain (pinjaman/bekalan): RM ' + hutangLain.toFixed(2) + ' — lihat halaman Hutang untuk butiran.');
-  if (totalPayrollUpcoming > 0) msgs.push('🗓️ RM ' + totalPayrollUpcoming.toFixed(2) + ' gaji akan datang (belum sampai tarikh) — belum ditolak dari akaun lagi.');
+  if (totalPayrollUpcoming > 0) msgs.push('🗓️ RM ' + totalPayrollUpcoming.toFixed(2) + ' gaji belum dibayar — belum ditolak dari akaun sehingga Ibu tandakan "Telah Dibayar".');
+  if (totalCommitmentUpcoming > 0) msgs.push('🗒️ RM ' + totalCommitmentUpcoming.toFixed(2) + ' komitmen bulan ini belum dibayar — belum ditolak dari akaun sehingga Ibu tandakan "Telah Dibayar".');
   if (msgs.length) { note.style.display = 'block'; note.innerHTML = msgs.join('<br>'); }
   else { note.style.display = 'none'; }
 
@@ -760,14 +822,47 @@ function renderPayroll() {
   const el = document.getElementById('payrollList');
   el.innerHTML = DATA.payroll.length === 0 ? '<div class="empty">Belum ada rekod gaji.</div>' :
     [...DATA.payroll].sort((a,b)=>new Date(a.tarikhBayar)-new Date(b.tarikhBayar)).map(p => {
+      const paid = !!p.processed;
       return `
-      <div class="list-item">
-        <div class="info">
-          <div class="t1">${p.nama} <span class="tag ${p.processed?'':'warn'}">${p.processed ? 'Ditolak dari Akaun' : 'Akan Datang'}</span></div>
-          <div class="t2">Perlu dibayar: ${p.tarikhBayar} · ${p.kaedah || 'Cash'}</div>
+      <div class="list-item" style="flex-direction:column; align-items:stretch;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="info">
+            <div class="t1">${p.nama} <span class="tag ${paid?'':'warn'}">${paid ? 'Telah Dibayar' : 'Belum Dibayar'}</span></div>
+            <div class="t2">Sasaran: ${p.tarikhBayar} · ${p.kaedah || 'Cash'}${paid ? ' · Dibayar: ' + p.tarikhDibayar : ''}</div>
+          </div>
+          <div class="amt" style="color:var(--negative)">${fmt(p.jumlah)}</div>
+          <button class="del" onclick="deleteItem('payroll','${p.id}')">✕</button>
         </div>
-        <div class="amt" style="color:var(--negative)">${fmt(p.jumlah)}</div>
-        <button class="del" onclick="deleteItem('payroll','${p.id}')">✕</button>
+        ${!paid ? `
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <input type="date" id="tarikhDibayar-${p.id}" value="${todayStr()}" style="flex:1;">
+          <button onclick="tandaGajiDibayar('${p.id}')">Tandakan Telah Dibayar</button>
+        </div>` : ''}
+      </div>`;
+    }).join('');
+}
+
+function renderCommitments() {
+  const el = document.getElementById('commitmentList');
+  if (!el) return;
+  el.innerHTML = DATA.commitments.length === 0 ? '<div class="empty">Belum ada komitmen bulan ini.</div>' :
+    [...DATA.commitments].sort((a,b)=>new Date(a.tarikhSasaran)-new Date(b.tarikhSasaran)).map(c => {
+      const paid = !!c.processed;
+      return `
+      <div class="list-item" style="flex-direction:column; align-items:stretch;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="info">
+            <div class="t1">${c.perkara} <span class="tag ${paid?'':'warn'}">${paid ? 'Telah Dibayar' : 'Belum Dibayar'}</span></div>
+            <div class="t2">Sasaran: ${c.tarikhSasaran} · ${c.kaedah || 'Cash'}${paid ? ' · Dibayar: ' + c.tarikhDibayar : ''}</div>
+          </div>
+          <div class="amt" style="color:var(--negative)">${fmt(c.jumlah)}</div>
+          <button class="del" onclick="deleteItem('commitments','${c.id}')">✕</button>
+        </div>
+        ${!paid ? `
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <input type="date" id="komitmenTarikhDibayar-${c.id}" value="${todayStr()}" style="flex:1;">
+          <button onclick="tandaKomitmenDibayar('${c.id}')">Tandakan Telah Dibayar</button>
+        </div>` : ''}
       </div>`;
     }).join('');
 }
@@ -906,6 +1001,7 @@ function renderSearch() {
   DATA.expense.forEach(x => { if ((x.item||'').toLowerCase().includes(q)) results.push({label:'🧾 '+x.item, sub:'Duit Keluar · '+x.tarikh, jumlah:x.jumlah, jenis:'keluar'}); });
   DATA.purchases.forEach(x => { if ((x.bahan||'').toLowerCase().includes(q) || (x.kedai||'').toLowerCase().includes(q)) results.push({label:'🛒 '+x.bahan, sub:(x.kedai||'-')+' · '+fmt(x.hargaUnit)+'/'+x.unit, jumlah:null, jenis:'ref'}); });
   DATA.payroll.forEach(x => { if ((x.nama||'').toLowerCase().includes(q)) results.push({label:'👥 '+x.nama, sub:'Gaji · perlu dibayar '+x.tarikhBayar, jumlah:x.jumlah, jenis:'keluar'}); });
+  DATA.commitments.forEach(x => { if ((x.perkara||'').toLowerCase().includes(q)) results.push({label:'🗒️ '+x.perkara, sub:'Komitmen · sasaran '+x.tarikhSasaran, jumlah:x.jumlah, jenis:'keluar'}); });
   DATA.debts.forEach(x => { if ((x.pemiutang||'').toLowerCase().includes(q)) results.push({label:'📉 '+x.pemiutang, sub:'Hutang · baki '+fmt(x.baki), jumlah:null, jenis:'ref'}); });
 
   el.innerHTML = results.length === 0 ? '<div class="empty">Tiada hasil dijumpai.</div>' :
@@ -981,7 +1077,7 @@ const modalFields = document.getElementById('modalFields');
 const modalTitle = document.getElementById('modalTitle');
 
 document.getElementById('fabAdd').addEventListener('click', () => {
-  const map = { masuk: 'income', keluar: 'expense', beli: 'purchase', gaji: 'payroll', akaun: 'saldo', hutang: 'debt' };
+  const map = { masuk: 'income', keluar: 'expense', beli: 'purchase', gaji: 'payroll', komitmen: 'commitment', akaun: 'saldo', hutang: 'debt' };
   if (currentPage === 'beli') editingPurchaseId = null;
   if (currentPage === 'hutang') editingDebtId = null;
   openModal(map[currentPage] || 'income');
@@ -1050,7 +1146,17 @@ function openModal(type) {
         <select id="f_kaedah"><option>Cash</option><option>Transfer</option></select>
       </div>
       <div class="field"><label>Tarikh Perlu Dibayar</label><input type="date" id="f_tarikhbayar" value="${todayStr()}"></div>
-      <div class="field"><label style="font-size:0.72rem; color:var(--text-muted); font-weight:400;">📌 Kalau tarikh ni hari ini/sudah lepas, ia terus jadi Duit Keluar. Kalau tarikh depan, ia tunggu dulu.</label></div>`;
+      <div class="field"><label style="font-size:0.72rem; color:var(--text-muted); font-weight:400;">📌 Ini tarikh sasaran sahaja. Baki Cash/Bank tak akan ditolak sehingga Ibu tandakan "Telah Dibayar" di senarai Gaji.</label></div>`;
+  } else if (type === 'commitment') {
+    modalTitle.textContent = '🗒️ Tambah Komitmen';
+    modalFields.innerHTML = `
+      <div class="field"><label>Perkara</label><input type="text" id="f_perkara" placeholder="cth: Sewa Kedai / Bil TNB / Bayaran Pembekal"></div>
+      <div class="field"><label>Jumlah (RM)</label><input type="number" id="f_jumlah" step="0.01" placeholder="0.00"></div>
+      <div class="field"><label>Kaedah Bayaran</label>
+        <select id="f_kaedah"><option>Cash</option><option>Transfer</option></select>
+      </div>
+      <div class="field"><label>Tarikh Sasaran</label><input type="date" id="f_tarikhsasaran" value="${todayStr()}"></div>
+      <div class="field"><label style="font-size:0.72rem; color:var(--text-muted); font-weight:400;">📌 Ini peringatan sahaja. Baki Cash/Bank tak akan ditolak sehingga Ibu tandakan "Telah Dibayar" di senarai Komitmen.</label></div>`;
   } else if (type === 'saldo') {
     modalTitle.textContent = '🏦 Edit Baki Bermula';
     modalFields.innerHTML = `
@@ -1203,7 +1309,28 @@ document.getElementById('modalSave').addEventListener('click', () => {
         if (error) { DATA.payroll = DATA.payroll.filter(x => x.id !== tempId); renderAll(); showToast('Gagal simpan gaji. Cuba lagi.', true); return; }
         const i = DATA.payroll.findIndex(x => x.id === tempId);
         if (i > -1) DATA.payroll[i] = mapPayrollFromDb(data);
-        await prosesGajiTertunggak();
+        renderAll(); showToast('Disimpan ✓');
+      });
+    return;
+  }
+
+  // ---------- KOMITMEN BULAN INI ----------
+  if (type === 'commitment') {
+    const perkara = document.getElementById('f_perkara').value.trim();
+    const jumlah = parseFloat(document.getElementById('f_jumlah').value);
+    if (!perkara || !jumlah || jumlah <= 0) { showToast('Sila isi perkara & jumlah yang sah.', true); return; }
+    const kaedah = document.getElementById('f_kaedah').value;
+    const tarikhSasaran = document.getElementById('f_tarikhsasaran').value;
+    const tempId = 'tmp' + Date.now();
+    DATA.commitments.push({ id: tempId, perkara, jumlah, kaedah, tarikhSasaran, processed: false });
+    renderAll(); modalBg.classList.remove('show'); showToast('Menyimpan...');
+    supabaseClient.from('commitments')
+      .insert({ user_id: currentUserId, perkara, jumlah, kaedah, tarikh_sasaran: tarikhSasaran })
+      .select().single()
+      .then(({ data, error }) => {
+        if (error) { DATA.commitments = DATA.commitments.filter(x => x.id !== tempId); renderAll(); showToast('Gagal simpan komitmen. Cuba lagi.', true); return; }
+        const i = DATA.commitments.findIndex(x => x.id === tempId);
+        if (i > -1) DATA.commitments[i] = mapCommitmentFromDb(data);
         renderAll(); showToast('Disimpan ✓');
       });
     return;
